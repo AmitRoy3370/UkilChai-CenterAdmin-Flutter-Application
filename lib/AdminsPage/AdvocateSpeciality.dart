@@ -1,0 +1,20 @@
+enum AdvocateSpeciality {
+  CRIMINAL_LAWYER,
+  CIVIL_LAWYER,
+  FAMILY_LAWYER,
+  CORPORATE_LAWYER,
+  CYBER_CRIME_LAWYER,
+  PROPERTY_LAWYER,
+  INTELLECTUAL_PROPERTY_LAWYER,
+  TAX_LAWYER,
+  LABOR_LAWYER,
+  TRADE_LAWYER,
+  BANKING_LAWYER,
+  INSURANCE_LAWYER,
+  WOMEN_AND_CHILD_RIGHTS_LAWYER,
+}
+
+
+String specialityLabel(String value) {
+  return value.replaceAll("_", " ");
+}
