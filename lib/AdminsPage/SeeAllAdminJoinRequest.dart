@@ -83,6 +83,7 @@ class _AdminJoinRequestPageState extends State<AdminJoinRequestPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text("Admin Join Requests"),
         actions: [

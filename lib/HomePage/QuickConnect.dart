@@ -1,3 +1,4 @@
+import 'package:advocatechaicenteradmin/AdminsPage/AdminDashboardPage.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -46,7 +47,7 @@ class QuickConnect extends StatelessWidget {
             // 1st Tile
             QuickCard(
               icon: Icons.person_search,
-              title: "Admin Request",
+              title: "Admins",
               subtitle: "Connect with specialized admins",
               onTap : () {
                 print("Find Expert");
@@ -54,7 +55,7 @@ class QuickConnect extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_)  => AdminJoinRequestPage(),
+                    builder: (_)  => AdminDashboardPage(),
                   ),
                 );
 
