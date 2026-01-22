@@ -7,6 +7,7 @@ import '../Utils/BaseURL.dart' as BASE_URL;
 import './Admin.dart';
 import './AdminService.dart';
 import './AdvocateSpeciality.dart';
+import './AdminDetailsPage.dart';
 
 class AdminListPage extends StatefulWidget {
   const AdminListPage({super.key});
@@ -136,11 +137,11 @@ class _AdminListPageState extends State<AdminListPage> {
             padding: const EdgeInsets.all(8),
             child: DropdownButtonFormField<AdvocateSpeciality>(
               value: selectedSpeciality,
-              hint: const Text("Search by Speciality"),
+              hint: const Text("Search by Speciality", style: TextStyle(color: Colors.red, fontSize: 15, fontStyle: FontStyle.normal),),
               items: AdvocateSpeciality.values.map((s) {
                 return DropdownMenuItem(
                   value: s,
-                  child: Text(specialityLabel(s.name)),
+                  child: Text(specialityLabel(s.name), style: TextStyle(color: Colors.red, fontSize: 15, fontStyle: FontStyle.normal),),
                 );
               }).toList(),
               onChanged: (value) {
@@ -187,6 +188,14 @@ class _AdminListPageState extends State<AdminListPage> {
                                 )
                                 .toList(),
                           ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AdminDetailsPage( admin : admin),
+                              ),
+                            );
+                          },
                         ),
                       );
                     },
