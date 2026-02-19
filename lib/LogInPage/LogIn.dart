@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Auth/AuthService.dart';
+import '../ChatRelatedPages/user_active_service.dart';
 import '../RegistrationPage/RegistrationPage.dart';
 import 'package:advocatechaicenteradmin/Utils/BaseURL.dart' as baseURL;
 import 'dart:io';
 import 'dart:typed_data';
+
+import '../Utils/BaseURL.dart' as BASE_URL;
 
 class LogIn extends StatefulWidget {
   const LogIn({super.key});
@@ -84,7 +87,6 @@ class LogInState extends State<LogIn> {
       );
 
       if (logInResponse.statusCode == 200 || logInResponse.statusCode == 201) {
-
         print("logIn response :- ${logInResponse.body}");
 
         final centerAdminUrl =
@@ -125,11 +127,17 @@ class LogInState extends State<LogIn> {
             isVisible = true;
             AuthService.saveToken(token);
             AuthService.saveUserId(userId);
+            setUserActive(true);
           });
         } else {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text("Only center admin can logged in at here....", style: TextStyle(color: Colors.red,))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                "Only center admin can logged in at here....",
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          );
         }
       } else {
         ScaffoldMessenger.of(
@@ -142,6 +150,38 @@ class LogInState extends State<LogIn> {
   initState() {
     super.initState();
     doesItVisible();
+  }
+
+  void setUserActive(bool active) async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString('jwt_token');
+      String? userId = prefs.getString('userId');
+      if (userId != null) {
+        final response = await http.get(
+          Uri.parse("${BASE_URL.Urls().baseURL}user-active/user/$userId"),
+          headers: {
+            'content-type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final body = jsonDecode(response.body);
+
+          await UserActiveService.updateUserActive(
+            body["id"],
+            userId,
+            active,
+            token,
+          );
+        } else {
+          await UserActiveService.addUserActive(userId, active, token);
+        }
+      }
+    } catch (e) {
+      print(e);
+    }
   }
 
   @override
@@ -161,7 +201,7 @@ class LogInState extends State<LogIn> {
                 borderRadius: BorderRadius.all(Radius.circular(25.0)),
               ),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: Colors.red,
               contentPadding: EdgeInsets.all(10),
               hintStyle: TextStyle(color: Colors.grey, fontSize: 15),
             ),
@@ -185,7 +225,7 @@ class LogInState extends State<LogIn> {
                 borderRadius: BorderRadius.all(Radius.circular(25.0)),
               ),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: Colors.red,
               contentPadding: EdgeInsets.all(10),
 
               // 👇 Suffix icon to toggle visibility
@@ -254,7 +294,7 @@ class LogInState extends State<LogIn> {
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 20,
-                color: Colors.white,
+                color: Colors.black,
               ),
               textAlign: TextAlign.center,
               maxLines: 2,

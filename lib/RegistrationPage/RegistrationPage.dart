@@ -379,7 +379,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
         if (kDebugMode) {
           print("web image byte in pick image :- ${webImageBytes.toString()}");
         }
-
       } else {
         pickedImage = File(file.path);
       }
@@ -702,117 +701,123 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Stack(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(15),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const SizedBox(
-                              height: 20,
-                            ), // Space for close button
-                            TextField(
-                              controller: nameController,
-                              decoration: const InputDecoration(
-                                labelText: "Name",
-                              ),
-                            ),
-                            TextField(
-                              controller: passwordController,
-                              obscureText: !_showPassword,
-                              decoration: InputDecoration(
-                                labelText: "Password",
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _showPassword
-                                        ? Icons.visibility
-                                        : Icons.visibility_off,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _showPassword = !_showPassword;
-                                    });
-                                  },
+                child: SingleChildScrollView(
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(15),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                height: 20,
+                              ), // Space for close button
+                              TextField(
+                                controller: nameController,
+                                decoration: const InputDecoration(
+                                  labelText: "Name",
                                 ),
                               ),
-                            ),
+                              TextField(
+                                controller: passwordController,
+                                obscureText: !_showPassword,
+                                decoration: InputDecoration(
+                                  labelText: "Password",
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _showPassword
+                                          ? Icons.visibility
+                                          : Icons.visibility_off,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _showPassword = !_showPassword;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
 
-                            TextField(
-                              controller: emailController,
-                              decoration: const InputDecoration(
-                                labelText: "Email",
+                              TextField(
+                                controller: emailController,
+                                decoration: const InputDecoration(
+                                  labelText: "Email",
+                                ),
                               ),
-                            ),
-                            TextField(
-                              controller: phoneController,
-                              decoration: const InputDecoration(
-                                labelText: "Phone",
+                              TextField(
+                                controller: phoneController,
+                                decoration: const InputDecoration(
+                                  labelText: "Phone",
+                                ),
                               ),
-                            ),
-                            TextField(
-                              controller: locationTextController,
-                              readOnly: true,
-                              decoration: const InputDecoration(
-                                labelText: "Location Info",
+                              TextField(
+                                controller: locationTextController,
+                                readOnly: true,
+                                decoration: const InputDecoration(
+                                  labelText: "Location Info",
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 20),
-                            GestureDetector(
-                              onTap: pickImage,
-                              child: Container(
-                                height: 120,
-                                width: 120,
-                                decoration: BoxDecoration(border: Border.all()),
-                                child:
-                                    pickedImage == null && webImageBytes == null
-                                    ? const Icon(Icons.camera_alt, size: 50)
-                                    : kIsWeb
-                                    ? Image.memory(
-                                        webImageBytes!,
-                                        fit: BoxFit.cover,
-                                      )
-                                    : Image.file(
-                                        pickedImage!,
-                                        fit: BoxFit.cover,
-                                      ),
+                              const SizedBox(height: 20),
+                              GestureDetector(
+                                onTap: pickImage,
+                                child: Container(
+                                  height: 120,
+                                  width: 120,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(),
+                                  ),
+                                  child:
+                                      pickedImage == null &&
+                                          webImageBytes == null
+                                      ? const Icon(Icons.camera_alt, size: 50)
+                                      : kIsWeb
+                                      ? Image.memory(
+                                          webImageBytes!,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : Image.file(
+                                          pickedImage!,
+                                          fit: BoxFit.cover,
+                                        ),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: showDistrictDialog,
-                              child: const Text("Select Districts"),
-                            ),
+                              const SizedBox(height: 20),
+                              ElevatedButton(
+                                onPressed: showDistrictDialog,
+                                child: const Text("Select Districts"),
+                              ),
 
-                            Wrap(
-                              children: selectedDistricts
-                                  .map((d) => Chip(label: Text(d)))
-                                  .toList(),
-                            ),
+                              Wrap(
+                                children: selectedDistricts
+                                    .map((d) => Chip(label: Text(d)))
+                                    .toList(),
+                              ),
 
-                            ElevatedButton(
-                              onPressed: _submitForm,
-                              child: const Text("Submit Registration"),
-                            ),
-                          ],
+                              ElevatedButton(
+                                onPressed: _submitForm,
+                                child: const Text("Submit Registration"),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          setState(() {
-                            showForm = false;
-                          });
-                        },
+
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () {
+                            setState(() {
+                              showForm = false;
+                            });
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

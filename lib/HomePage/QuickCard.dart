@@ -23,19 +23,19 @@ class QuickCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: const Color(0xFF3A3A3A),
+          color: Colors.blue.shade50,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 35, color: Colors.white),
+            Icon(icon, size: 35, color: Colors.black),
             const SizedBox(height: 12),
             Text(
               title,
               style: const TextStyle(
-                color: Colors.white,
-                fontSize: 17,
+                color: Colors.black,
+                fontSize: 40,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -43,8 +43,8 @@ class QuickCard extends StatelessWidget {
             Text(
               subtitle,
               style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 13,
+                color: Colors.black,
+                fontSize: 25,
                 height: 1.2,
               ),
             ),

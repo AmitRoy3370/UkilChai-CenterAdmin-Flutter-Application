@@ -20,6 +20,13 @@ enum AdvocateSpeciality {
 extension AdvocateSpecialityExt on AdvocateSpeciality {
   String get apiValue => name; // EXACT enum string
 
+  static AdvocateSpeciality fromApi(String value) {
+    return AdvocateSpeciality.values.firstWhere(
+          (e) => e.name == value,
+      orElse: () => AdvocateSpeciality.CRIMINAL_LAWYER,
+    );
+  }
+
   String get label {
     switch (this) {
       case AdvocateSpeciality.CRIMINAL_LAWYER:

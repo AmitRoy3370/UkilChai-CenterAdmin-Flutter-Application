@@ -102,7 +102,7 @@ class _AdminListPageState extends State<AdminListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text("All Admins"),
         actions: [
@@ -137,11 +137,11 @@ class _AdminListPageState extends State<AdminListPage> {
             padding: const EdgeInsets.all(8),
             child: DropdownButtonFormField<AdvocateSpeciality>(
               value: selectedSpeciality,
-              hint: const Text("Search by Speciality", style: TextStyle(color: Colors.red, fontSize: 15, fontStyle: FontStyle.normal),),
+              hint: const Text("Search by Speciality", style: TextStyle(color: Colors.black, fontSize: 15, fontStyle: FontStyle.normal),),
               items: AdvocateSpeciality.values.map((s) {
                 return DropdownMenuItem(
                   value: s,
-                  child: Text(specialityLabel(s.name), style: TextStyle(color: Colors.red, fontSize: 15, fontStyle: FontStyle.normal),),
+                  child: Text(specialityLabel(s.name), style: TextStyle(color: Colors.black, fontSize: 15, fontStyle: FontStyle.normal),),
                 );
               }).toList(),
               onChanged: (value) {

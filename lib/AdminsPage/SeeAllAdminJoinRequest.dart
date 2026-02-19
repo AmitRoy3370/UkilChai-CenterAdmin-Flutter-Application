@@ -83,7 +83,7 @@ class _AdminJoinRequestPageState extends State<AdminJoinRequestPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text("Admin Join Requests"),
         actions: [
@@ -101,7 +101,7 @@ class _AdminJoinRequestPageState extends State<AdminJoinRequestPage> {
                   child: TextField(
                     controller: userIdCtrl,
                     decoration: const InputDecoration(
-                      labelText: "Search by User ID",
+                      labelText: "Search by User name",
                     ),
                   ),
                 ),
@@ -117,12 +117,12 @@ class _AdminJoinRequestPageState extends State<AdminJoinRequestPage> {
           Padding(
             padding: const EdgeInsets.all(8),
             child: DropdownButtonFormField<AdvocateSpeciality>(
-              hint: const Text("Search by Speciality", style: TextStyle(color: Colors.red, fontSize: 15, fontStyle: FontStyle.normal),),
+              hint: const Text("Search by Speciality", style: TextStyle(color: Colors.black, fontSize: 15, fontStyle: FontStyle.normal),),
               value: selectedSpeciality,
               items: AdvocateSpeciality.values.map((s) {
                 return DropdownMenuItem(
                   value: s,
-                  child: Text(specialityLabel(s.name), style: TextStyle(color: Colors.red, fontSize: 15, fontStyle: FontStyle.normal),),
+                  child: Text(specialityLabel(s.name), style: TextStyle(color: Colors.black, fontSize: 15, fontStyle: FontStyle.normal),),
                 );
               }).toList(),
               onChanged: (value) {

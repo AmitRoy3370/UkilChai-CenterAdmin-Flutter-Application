@@ -11,6 +11,22 @@ import '../AdvocatePages/AdvocateDetails.dart';
 class AdvocateList extends StatelessWidget {
   const AdvocateList({super.key});
 
+  Future<Uint8List?> fetchProfileImage(String? imageId) async {
+    if (imageId == null || imageId.isEmpty) return null;
+
+    final token = await AuthService.getToken();
+
+    final response = await http.get(
+      Uri.parse("${baseURL.Urls().baseURL}user/download/$imageId"),
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    }
+    return null;
+  }
+
   Future<List<AdvocateDetailsModel>> getAdvocateList() async {
     final token = await AuthService.getToken();
     final uri = Uri.parse("${baseURL.Urls().baseURL}advocate/all");
@@ -59,10 +75,10 @@ class AdvocateList extends StatelessWidget {
         advocateDetailsModel.experience = advocateDecoded["experience"];
         advocateDetailsModel.licenseKey = advocateDecoded["licenseKey"];
         advocateDetailsModel.advocateSpeciality =
-            advocateDecoded["advocateSpeciality"];
+        advocateDecoded["advocateSpeciality"];
         advocateDetailsModel.degrees = advocateDecoded["degrees"];
         advocateDetailsModel.workingExperiences =
-            advocateDecoded["workingExperiences"];
+        advocateDecoded["workingExperiences"];
         advocateDetailsModel.password = user["password"];
 
         if (contactResponse.statusCode == 200) {
@@ -118,6 +134,66 @@ class AdvocateList extends StatelessWidget {
     return list;
   }
 
+  Widget _section(String title, List<Widget> children) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white70,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+
+  Widget _listSection(String title, List<String> items) {
+    return _section(
+      title,
+      items.isEmpty
+          ? [
+        const Text(
+          "No data available",
+          style: TextStyle(color: Colors.black),
+        ),
+      ]
+          : items.map((e) => _row(Icons.check_circle, e)).toList(),
+    );
+  }
+
+  Widget _row(IconData icon, String? value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.black, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value ?? "Not available",
+              style: const TextStyle(color: Colors.black),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<dynamic>>(
@@ -135,7 +211,7 @@ class AdvocateList extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             child: Text(
               snapshot.error.toString(),
-              style: const TextStyle(color: Colors.red),
+              style: const TextStyle(color: Colors.black),
             ),
           );
         }
@@ -163,29 +239,26 @@ class AdvocateList extends StatelessWidget {
             const Text(
               "Top advocates list...",
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 25,
                 fontWeight: FontWeight.bold,
-                color: Colors.red,
+                color: Colors.black,
               ),
             ),
             const SizedBox(height: 20),
-            ListView.separated(
+            GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: advocates.length,
-              separatorBuilder: (_, __) => const Divider(color: Colors.red),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2, // 2 cards per row
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 1.2,
+              ),
               itemBuilder: (context, index) {
                 final AdvocateDetailsModel advocate = advocates[index];
 
-                return ListTile(
-                  title: Text(
-                    advocate.name ?? "Unknown Advocate",
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
-                    ),
-                  ),
+                return GestureDetector(
                   onTap: () {
                     Navigator.push(
                       context,
@@ -195,6 +268,65 @@ class AdvocateList extends StatelessWidget {
                       ),
                     );
                   },
+                  child: Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          children: [
+                            FutureBuilder<Uint8List?>(
+                              future: fetchProfileImage(
+                                advocate.profileImageId,
+                              ),
+                              builder: (context, snapshot) {
+                                if (!snapshot.hasData) {
+                                  return const CircleAvatar(
+                                    radius: 55,
+                                    child: Icon(Icons.person, size: 55),
+                                  );
+                                }
+
+                                return CircleAvatar(
+                                  radius: 55,
+                                  backgroundImage: MemoryImage(snapshot.data!),
+                                );
+                              },
+                            ),
+
+                            Text(
+                              advocate.name ?? "Unknown",
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 25,
+                                color: Colors.black,
+                              ),
+                            ),
+                            Text(
+                              "${advocate.experience ?? 0} years experience",
+                              style: TextStyle(color: Colors.black),
+                            ),
+                            _section("Professional Info", [
+                              _row(
+                                Icons.badge,
+                                "License: ${advocate.licenseKey}",
+                              ),
+                            ]),
+
+                            _listSection(
+                              "Specialities",
+                              (advocate.advocateSpeciality).cast<String>(),
+                            ),
+
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 );
               },
             ),

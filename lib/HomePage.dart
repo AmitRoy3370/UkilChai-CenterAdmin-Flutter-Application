@@ -1,10 +1,11 @@
 
 import 'package:advocatechaicenteradmin/HomePage/AdvocateList.dart';
-import 'package:advocatechaicenteradmin/HomePage/ArticleList.dart';
+
 import 'package:advocatechaicenteradmin/HomePage/QuickConnect.dart';
 import 'package:flutter/cupertino.dart';
 
 import 'HomePage/SearchScreen.dart';
+import 'PostRelatedPages/post_feed_page_home_page.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({super.key});
@@ -30,7 +31,7 @@ class HomeScreenState extends State<Homepage> {
             SearchScreen(),
             const SizedBox(height: 20),
             QuickConnect(),
-            ArticleList(),
+            PostFeedPageHomePage(),
             const SizedBox(height: 20),
             AdvocateList(),
             const SizedBox(height: 20),

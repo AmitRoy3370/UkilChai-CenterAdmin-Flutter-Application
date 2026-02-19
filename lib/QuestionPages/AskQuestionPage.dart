@@ -27,7 +27,7 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F0F),
+      backgroundColor: Colors.white70,
       appBar: AppBar(title: const Text("Ask Question")),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -37,12 +37,12 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
             TextField(
               controller: messageCtrl,
               maxLines: 5,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black),
               decoration: InputDecoration(
                 hintText: "Write your legal question...",
                 hintStyle: const TextStyle(color: Colors.grey),
                 filled: true,
-                fillColor: const Color(0xFF1C1C1C),
+                fillColor: Colors.white,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(15),
                 ),
@@ -58,7 +58,7 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
                 "Select Speciality",
                 style: Theme.of(
                   context,
-                ).textTheme.titleMedium?.copyWith(color: Colors.white),
+                ).textTheme.titleMedium?.copyWith(color: Colors.black),
               ),
             ),
 
@@ -85,22 +85,22 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? Colors.deepOrange
-                            : const Color(0xFF1C1C1C),
+                            ? Colors.green
+                            : Colors.white,
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: Colors.deepOrange),
+                        border: Border.all(color: Colors.green),
                       ),
                       padding: const EdgeInsets.all(14),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(speciality.icon, color: Colors.white, size: 30),
+                          Icon(speciality.icon, color: Colors.black, size: 30),
                           const SizedBox(height: 10),
                           Text(
                             speciality.label,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: Colors.black,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -138,7 +138,7 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
             ElevatedButton(
               onPressed: submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepOrange,
+                backgroundColor: Colors.green,
                 minimumSize: const Size(double.infinity, 50),
               ),
               child: const Text("Submit Question"),
@@ -147,7 +147,7 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
             ElevatedButton(
               onPressed: seeAllQuestion,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepOrange,
+                backgroundColor: Colors.green,
                 minimumSize: const Size(double.infinity, 50),
               ),
               child: const Text("See All Question"),

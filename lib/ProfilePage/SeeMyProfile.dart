@@ -147,7 +147,7 @@ class SeeProfileState extends State<SeeMyProfile> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F0F),
+      backgroundColor: Colors.white70,
       appBar: AppBar(
         title: const Text("My Profile"),
         centerTitle: true,
@@ -179,7 +179,7 @@ class SeeProfileState extends State<SeeMyProfile> {
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Colors.black,
               ),
             ),
 
@@ -187,7 +187,7 @@ class SeeProfileState extends State<SeeMyProfile> {
 
             Text(
               "User Profile",
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+              style: TextStyle(color: Colors.black, fontSize: 14),
             ),
 
             const SizedBox(height: 30),
@@ -249,8 +249,8 @@ class SeeProfileState extends State<SeeMyProfile> {
               icon: const Icon(Icons.edit),
               label: const Text("Edit Profile"),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepOrange,
-                foregroundColor: Colors.white,
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 30,
                   vertical: 14,
@@ -269,18 +269,18 @@ class SeeProfileState extends State<SeeMyProfile> {
   Widget _profileRow(IconData icon, String label, String? value) {
     return Row(
       children: [
-        Icon(icon, color: Colors.deepOrange, size: 22),
+        Icon(icon, color: Colors.black, size: 22),
         const SizedBox(width: 12),
         Text(
           "$label:",
-          style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+          style: TextStyle(color: Colors.black, fontSize: 14),
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             value ?? "Not available",
             style: const TextStyle(
-              color: Colors.white,
+              color: Colors.red,
               fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
