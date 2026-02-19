@@ -71,8 +71,20 @@ class CaseDetailsPage extends StatelessWidget {
     );
 
     if(type == 1) {
+
+      bool myAdvocate = false;
+
+      if(centerAdminResponse.statusCode == 200) {
+
+        final centerAdminBody = jsonDecode(centerAdminResponse.body);
+        final advocateIds = centerAdminBody["advocates"] as List<dynamic>;
+
+        myAdvocate = advocateIds.contains(caseModel.advocateId);
+
+      }
+
       return myUserId != null && (myUserId == caseModel.userId ||
-          centerAdminResponse.statusCode == 200);
+          (centerAdminResponse.statusCode == 200 && myAdvocate) );
     }else {
       return myUserId != null && (myUserId == caseModel.userId);
     }
