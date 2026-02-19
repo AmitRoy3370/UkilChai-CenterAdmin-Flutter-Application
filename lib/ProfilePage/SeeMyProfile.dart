@@ -197,7 +197,7 @@ class SeeProfileState extends State<SeeMyProfile> {
               width: double.infinity,
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: const Color(0xFF1C1C1C),
+                color: Colors.white70,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
@@ -280,7 +280,7 @@ class SeeProfileState extends State<SeeMyProfile> {
           child: Text(
             value ?? "Not available",
             style: const TextStyle(
-              color: Colors.red,
+              color: Colors.black,
               fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
@@ -294,7 +294,7 @@ class SeeProfileState extends State<SeeMyProfile> {
   Widget _divider() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Divider(color: Colors.grey.shade800, thickness: 1),
+      child: Divider(color: Colors.grey, thickness: 1),
     );
   }
 }

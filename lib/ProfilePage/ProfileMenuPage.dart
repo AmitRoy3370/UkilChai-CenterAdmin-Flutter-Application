@@ -15,7 +15,7 @@ class ProfileMenuPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.white70,
       appBar: AppBar(
         title: const Text("My Account"),
         backgroundColor: Colors.green,
@@ -127,7 +127,7 @@ class ProfileMenuPage extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     return Card(
-      color: Colors.grey[900],
+      color: Colors.white,
       child: ListTile(
         leading: Icon(icon, color: color),
         title: Text(title, style: TextStyle(color: color)),

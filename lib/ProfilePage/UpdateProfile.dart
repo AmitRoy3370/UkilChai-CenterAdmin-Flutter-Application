@@ -52,6 +52,76 @@ class _UpdateProfileState extends State<UpdateProfile> {
 
   get userIdValue => null;
 
+  List<String> selectedDistricts = [];
+  List<String> admins = [];
+  List<String> advocates = [];
+
+  final List<String> bangladeshDistricts = [
+    "Bagerhat",
+    "Bandarban",
+    "Barguna",
+    "Barisal",
+    "Bhola",
+    "Bogura",
+    "Brahmanbaria",
+    "Chandpur",
+    "Chapainawabganj",
+    "Chattogram",
+    "Chuadanga",
+    "Cox's Bazar",
+    "Cumilla",
+    "Dhaka",
+    "Dinajpur",
+    "Faridpur",
+    "Feni",
+    "Gaibandha",
+    "Gazipur",
+    "Gopalganj",
+    "Habiganj",
+    "Jamalpur",
+    "Jashore",
+    "Jhalokathi",
+    "Jhenaidah",
+    "Joypurhat",
+    "Khagrachari",
+    "Khulna",
+    "Kishoreganj",
+    "Kurigram",
+    "Kushtia",
+    "Lakshmipur",
+    "Lalmonirhat",
+    "Madaripur",
+    "Magura",
+    "Manikganj",
+    "Meherpur",
+    "Moulvibazar",
+    "Munshiganj",
+    "Mymensingh",
+    "Naogaon",
+    "Narail",
+    "Narayanganj",
+    "Narsingdi",
+    "Natore",
+    "Netrokona",
+    "Nilphamari",
+    "Noakhali",
+    "Pabna",
+    "Panchagarh",
+    "Patuakhali",
+    "Pirojpur",
+    "Rajbari",
+    "Rajshahi",
+    "Rangamati",
+    "Rangpur",
+    "Satkhira",
+    "Shariatpur",
+    "Sherpur",
+    "Sirajganj",
+    "Sunamganj",
+    "Sylhet",
+    "Tangail",
+  ];
+
   Future<File?> convertBytesToFile(
     Uint8List bytes, {
     required String extension,
@@ -115,37 +185,38 @@ class _UpdateProfileState extends State<UpdateProfile> {
             "Authorization": "Bearer $token",
           },
         );
-        if (profileImageResponse.statusCode == 200 &&
-            profileImageResponse.bodyBytes.isNotEmpty) {
+        if (profileImageResponse.statusCode == 200 && profileImageResponse.bodyBytes.isNotEmpty) {
           final bytes = profileImageResponse.bodyBytes;
-          bool isJpeg =
-              bytes.length > 4 &&
-              bytes[0] == 0xFF &&
-              bytes[1] == 0xD8; // JPEG check
-          bool isPng =
-              bytes.length > 4 &&
-              bytes[0] == 0x89 &&
-              bytes[1] == 0x50 &&
-              bytes[2] == 0x4E &&
-              bytes[3] == 0x47; // PNG check
+          bool isJpeg = bytes.length > 4 && bytes[0] == 0xFF && bytes[1] == 0xD8; // JPEG check
+          bool isPng = bytes.length > 4 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47; // PNG check
           bool isLikelyImage = isJpeg || isPng;
+
           if (isLikelyImage) {
             print("Valid image bytes detected");
             final mimeType = isJpeg ? 'image/jpeg' : 'image/png';
-            //final xfile = File.fromUri(Uri.parse(profileImageURL));
+
             if (mounted) {
-              try {
-                setState(() async {
-                  webImageBytes = bytes;
-                  final extension = isJpeg ? 'jpg' : 'png';
-                  pickedImage = await convertBytesToFile(
-                    bytes,
-                    extension: extension,
-                  );
+              setState(() {
+                webImageBytes = bytes; // Assign immediately (safe even on non-web)
+              });
+            }
+
+            try {
+              final extension = isJpeg ? 'jpg' : 'png';
+              final file = await convertBytesToFile(bytes, extension: extension);
+
+              if (mounted) { // Re-check after await
+                setState(() {
+                  pickedImage = file;
                   loading = false;
                 });
-              } catch (e) {
-                print(e.toString());
+              }
+            } catch (e) {
+              print(e.toString());
+              if (mounted) {
+                setState(() {
+                  loading = false;
+                });
               }
             }
           } else {
@@ -178,11 +249,15 @@ class _UpdateProfileState extends State<UpdateProfile> {
 
           locationPresent = true;
 
-          setState(() {
-            locationTextController.text = locationResponseData["locationName"];
-            latitude = locationResponseData["lattitude"];
-            longitude = locationResponseData["longitude"];
-          });
+          if(mounted) {
+            setState(() {
+              locationTextController.text =
+              locationResponseData["locationName"];
+              latitude = locationResponseData["lattitude"];
+              longitude = locationResponseData["longitude"];
+            });
+          }
+
         } else {
           final locationNameText = locationTextController.text;
           final locationLatitude = latitude;
@@ -236,10 +311,13 @@ class _UpdateProfileState extends State<UpdateProfile> {
             userContactInfoResponse.body,
           );
 
-          setState(() {
-            emailController.text = userContactInfoResponseData["email"];
-            phoneController.text = userContactInfoResponseData["phone"];
-          });
+          if(mounted) {
+            setState(() {
+              emailController.text = userContactInfoResponseData["email"];
+              phoneController.text = userContactInfoResponseData["phone"];
+            });
+          }
+
         } else {
           var uri = Uri.parse(
             "${baseURL.Urls().baseURL}user/contact-info/add?userId=$userId",
@@ -271,17 +349,118 @@ class _UpdateProfileState extends State<UpdateProfile> {
             ).showSnackBar(SnackBar(content: Text((response.body))));
           }
         }
+
+        final centerAdminResponse = await http.get(
+          Uri.parse("${baseURL.Urls().baseURL}center-admin/by-user/$userId"),
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer $token",
+          },
+        );
+
+        if (centerAdminResponse.statusCode == 200) {
+          final centerAdminResponseData = jsonDecode(centerAdminResponse.body);
+
+          if(mounted) {
+            setState(() {
+              selectedDistricts = centerAdminResponseData["districts"]
+                  .cast<String>();
+              admins = centerAdminResponseData["admins"].cast<String>();
+              advocates = centerAdminResponseData["advocates"].cast<String>();
+            });
+          }
+
+        }
       } else {
         print("Failed to load previous data: ${response.statusCode}");
       }
     }
   }
 
+  void showDistrictDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, dialogSetState) {
+            return AlertDialog(
+              title: const Text("Select Districts"),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView(
+                  children: bangladeshDistricts.map((district) {
+                    return CheckboxListTile(
+                      title: Text(district),
+                      value: selectedDistricts.contains(district),
+                      onChanged: (value) {
+                        dialogSetState(() {
+                          if (value == true) {
+                            if (!selectedDistricts.contains(district)) {
+                              selectedDistricts.add(district);
+                            }
+                          } else {
+                            selectedDistricts.remove(district);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Done"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _confirmDeleteDistrict(String district) async {
+    final confirm = await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Remove District"),
+        content: Text("Are you sure you want to remove $district?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Remove"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() {
+        selectedDistricts.remove(district);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("$district removed"),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    loadPreviousData();
-    _startLocationUpdates();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      loadPreviousData();
+      _startLocationUpdates();
+    });
   }
 
   void _startLocationUpdates() async {
@@ -910,9 +1089,52 @@ class _UpdateProfileState extends State<UpdateProfile> {
           }
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Registration Successful")),
+        final centerAdminResponse = await http.get(
+          Uri.parse("${baseURL.Urls().baseURL}center-admin/by-user/$userId"),
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer $token",
+          },
         );
+
+        if (centerAdminResponse.statusCode == 200) {
+          final centerAdminResponseData = jsonDecode(centerAdminResponse.body);
+
+          final centerAdminId = centerAdminResponseData["id"];
+
+          final centerAdminUpdateResponse = await http.put(
+            Uri.parse(
+              "${baseURL.Urls().baseURL}center-admin/update/$centerAdminId/$userId",
+            ),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $token",
+            },
+            body: jsonEncode({
+              "userId": userId,
+              "districts": selectedDistricts,
+              "admins": admins,
+              "advocates": advocates,
+            }),
+          );
+
+          if (centerAdminUpdateResponse.statusCode == 200 ||
+              centerAdminUpdateResponse.statusCode == 201) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Profile update Successful")),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(centerAdminUpdateResponse.body.toString()),
+              ),
+            );
+          }
+        } else {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text("Not updated")));
+        }
 
         if (kDebugMode) {
           // print("JWT TOKEN => $token");
@@ -933,6 +1155,22 @@ class _UpdateProfileState extends State<UpdateProfile> {
         context,
       ).showSnackBar(SnackBar(content: Text(e.toString())));
     }
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    nameController.dispose();
+    oldNameController.dispose();
+    passwordController.dispose();
+    oldPasswordController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+    locationTextController.dispose();
+    mapController.dispose();
+    // Cancel position stream if active
+    _positionStream?.drain(); // Or use a StreamSubscription and cancel it
+    super.dispose();
   }
 
   @override
@@ -1124,8 +1362,29 @@ class _UpdateProfileState extends State<UpdateProfile> {
                             ),
                             const SizedBox(height: 20),
                             ElevatedButton(
+                              onPressed: showDistrictDialog,
+                              child: const Text("Select Districts"),
+                            ),
+
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: selectedDistricts.map((district) {
+                                return Chip(
+                                  label: Text(district),
+                                  backgroundColor: Colors.blue.shade50,
+                                  deleteIcon: const Icon(Icons.close),
+                                  onDeleted: () {
+                                    _confirmDeleteDistrict(district);
+                                  },
+                                );
+                              }).toList(),
+                            ),
+
+                            const SizedBox(height: 20),
+                            ElevatedButton(
                               onPressed: _submitForm,
-                              child: const Text("Submit Registration"),
+                              child: const Text("Update Profile"),
                             ),
                           ],
                         ),
