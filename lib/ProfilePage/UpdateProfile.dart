@@ -185,10 +185,19 @@ class _UpdateProfileState extends State<UpdateProfile> {
             "Authorization": "Bearer $token",
           },
         );
-        if (profileImageResponse.statusCode == 200 && profileImageResponse.bodyBytes.isNotEmpty) {
+        if (profileImageResponse.statusCode == 200 &&
+            profileImageResponse.bodyBytes.isNotEmpty) {
           final bytes = profileImageResponse.bodyBytes;
-          bool isJpeg = bytes.length > 4 && bytes[0] == 0xFF && bytes[1] == 0xD8; // JPEG check
-          bool isPng = bytes.length > 4 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47; // PNG check
+          bool isJpeg =
+              bytes.length > 4 &&
+              bytes[0] == 0xFF &&
+              bytes[1] == 0xD8; // JPEG check
+          bool isPng =
+              bytes.length > 4 &&
+              bytes[0] == 0x89 &&
+              bytes[1] == 0x50 &&
+              bytes[2] == 0x4E &&
+              bytes[3] == 0x47; // PNG check
           bool isLikelyImage = isJpeg || isPng;
 
           if (isLikelyImage) {
@@ -197,15 +206,20 @@ class _UpdateProfileState extends State<UpdateProfile> {
 
             if (mounted) {
               setState(() {
-                webImageBytes = bytes; // Assign immediately (safe even on non-web)
+                webImageBytes =
+                    bytes; // Assign immediately (safe even on non-web)
               });
             }
 
             try {
               final extension = isJpeg ? 'jpg' : 'png';
-              final file = await convertBytesToFile(bytes, extension: extension);
+              final file = await convertBytesToFile(
+                bytes,
+                extension: extension,
+              );
 
-              if (mounted) { // Re-check after await
+              if (mounted) {
+                // Re-check after await
                 setState(() {
                   pickedImage = file;
                   loading = false;
@@ -249,15 +263,14 @@ class _UpdateProfileState extends State<UpdateProfile> {
 
           locationPresent = true;
 
-          if(mounted) {
+          if (mounted) {
             setState(() {
               locationTextController.text =
-              locationResponseData["locationName"];
+                  locationResponseData["locationName"];
               latitude = locationResponseData["lattitude"];
               longitude = locationResponseData["longitude"];
             });
           }
-
         } else {
           final locationNameText = locationTextController.text;
           final locationLatitude = latitude;
@@ -311,13 +324,12 @@ class _UpdateProfileState extends State<UpdateProfile> {
             userContactInfoResponse.body,
           );
 
-          if(mounted) {
+          if (mounted) {
             setState(() {
               emailController.text = userContactInfoResponseData["email"];
               phoneController.text = userContactInfoResponseData["phone"];
             });
           }
-
         } else {
           var uri = Uri.parse(
             "${baseURL.Urls().baseURL}user/contact-info/add?userId=$userId",
@@ -361,7 +373,7 @@ class _UpdateProfileState extends State<UpdateProfile> {
         if (centerAdminResponse.statusCode == 200) {
           final centerAdminResponseData = jsonDecode(centerAdminResponse.body);
 
-          if(mounted) {
+          if (mounted) {
             setState(() {
               selectedDistricts = centerAdminResponseData["districts"]
                   .cast<String>();
@@ -369,7 +381,6 @@ class _UpdateProfileState extends State<UpdateProfile> {
               advocates = centerAdminResponseData["advocates"].cast<String>();
             });
           }
-
         }
       } else {
         print("Failed to load previous data: ${response.statusCode}");
@@ -1250,7 +1261,9 @@ class _UpdateProfileState extends State<UpdateProfile> {
               bottom: 0,
               left: 0,
               right: 0,
-              child: Card(
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.6,
+                child:Card(
                 margin: const EdgeInsets.all(10),
                 elevation: 6,
                 shape: RoundedRectangleBorder(
@@ -1260,133 +1273,139 @@ class _UpdateProfileState extends State<UpdateProfile> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(15),
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const SizedBox(
-                              height: 20,
-                            ), // Space for close button
-                            TextField(
-                              readOnly: true,
-                              controller: oldNameController,
-                              decoration: const InputDecoration(
-                                labelText: "Old Name",
-                              ),
-                            ),
-                            TextField(
-                              controller: nameController,
-                              decoration: const InputDecoration(
-                                labelText: "New Name",
-                              ),
-                            ),
-                            TextField(
-                              controller: oldPasswordController,
-                              obscureText: !_showOldPassword,
-                              decoration: InputDecoration(
-                                labelText: "Old Password",
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _showOldPassword
-                                        ? Icons.visibility
-                                        : Icons.visibility_off,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _showOldPassword = !_showOldPassword;
-                                    });
-                                  },
+                      child: Padding(
+                        padding: const EdgeInsets.all(15),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(
+                                height: 20,
+                              ), // Space for close button
+                              TextField(
+                                readOnly: true,
+                                controller: oldNameController,
+                                decoration: const InputDecoration(
+                                  labelText: "Old Name",
                                 ),
                               ),
-                            ),
-                            TextField(
-                              controller: passwordController,
-                              obscureText: !_showPassword,
-                              decoration: InputDecoration(
-                                labelText: "New Password",
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _showPassword
-                                        ? Icons.visibility
-                                        : Icons.visibility_off,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _showPassword = !_showPassword;
-                                    });
-                                  },
+                              TextField(
+                                controller: nameController,
+                                decoration: const InputDecoration(
+                                  labelText: "New Name",
                                 ),
                               ),
-                            ),
+                              TextField(
+                                controller: oldPasswordController,
+                                obscureText: !_showOldPassword,
+                                decoration: InputDecoration(
+                                  labelText: "Old Password",
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _showOldPassword
+                                          ? Icons.visibility
+                                          : Icons.visibility_off,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _showOldPassword = !_showOldPassword;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+                              TextField(
+                                controller: passwordController,
+                                obscureText: !_showPassword,
+                                decoration: InputDecoration(
+                                  labelText: "New Password",
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _showPassword
+                                          ? Icons.visibility
+                                          : Icons.visibility_off,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _showPassword = !_showPassword;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
 
-                            TextField(
-                              controller: emailController,
-                              decoration: const InputDecoration(
-                                labelText: "Email",
+                              TextField(
+                                controller: emailController,
+                                decoration: const InputDecoration(
+                                  labelText: "Email",
+                                ),
                               ),
-                            ),
-                            TextField(
-                              controller: phoneController,
-                              decoration: const InputDecoration(
-                                labelText: "Phone",
+                              TextField(
+                                controller: phoneController,
+                                decoration: const InputDecoration(
+                                  labelText: "Phone",
+                                ),
                               ),
-                            ),
-                            TextField(
-                              controller: locationTextController,
-                              readOnly: true,
-                              decoration: const InputDecoration(
-                                labelText: "Location Info",
+                              TextField(
+                                controller: locationTextController,
+                                readOnly: true,
+                                decoration: const InputDecoration(
+                                  labelText: "Location Info",
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 20),
-                            GestureDetector(
-                              onTap: pickImage,
-                              child: Container(
-                                height: 120,
-                                width: 120,
-                                decoration: BoxDecoration(border: Border.all()),
-                                child:
-                                    pickedImage == null && webImageBytes == null
-                                    ? const Icon(Icons.camera_alt, size: 50)
-                                    : kIsWeb
-                                    ? Image.memory(
-                                        webImageBytes!,
-                                        fit: BoxFit.cover,
-                                      )
-                                    : Image.file(
-                                        pickedImage!,
-                                        fit: BoxFit.cover,
-                                      ),
+                              const SizedBox(height: 20),
+                              GestureDetector(
+                                onTap: pickImage,
+                                child: Container(
+                                  height: 120,
+                                  width: 120,
+                                  decoration: BoxDecoration(
+                                    border: Border.all(),
+                                  ),
+                                  child:
+                                      pickedImage == null &&
+                                          webImageBytes == null
+                                      ? const Icon(Icons.camera_alt, size: 50)
+                                      : kIsWeb
+                                      ? Image.memory(
+                                          webImageBytes!,
+                                          fit: BoxFit.cover,
+                                        )
+                                      : Image.file(
+                                          pickedImage!,
+                                          fit: BoxFit.cover,
+                                        ),
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: showDistrictDialog,
-                              child: const Text("Select Districts"),
-                            ),
+                              const SizedBox(height: 20),
+                              ElevatedButton(
+                                onPressed: showDistrictDialog,
+                                child: const Text("Select Districts"),
+                              ),
 
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: selectedDistricts.map((district) {
-                                return Chip(
-                                  label: Text(district),
-                                  backgroundColor: Colors.blue.shade50,
-                                  deleteIcon: const Icon(Icons.close),
-                                  onDeleted: () {
-                                    _confirmDeleteDistrict(district);
-                                  },
-                                );
-                              }).toList(),
-                            ),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: selectedDistricts.map((district) {
+                                  return Chip(
+                                    label: Text(district),
+                                    backgroundColor: Colors.blue.shade50,
+                                    deleteIcon: const Icon(Icons.close),
+                                    onDeleted: () {
+                                      _confirmDeleteDistrict(district);
+                                    },
+                                  );
+                                }).toList(),
+                              ),
 
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: _submitForm,
-                              child: const Text("Update Profile"),
-                            ),
-                          ],
+                              const SizedBox(height: 20),
+                              ElevatedButton(
+                                onPressed: _submitForm,
+                                child: const Text("Update Profile"),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1405,6 +1424,7 @@ class _UpdateProfileState extends State<UpdateProfile> {
                   ],
                 ),
               ),
+            )
             ),
         ],
       ),
