@@ -276,7 +276,7 @@ class AdvocateList extends StatelessWidget {
                     child: Center(
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
-                        child: Column(
+                        child: SingleChildScrollView( child: Column(
                           children: [
                             FutureBuilder<Uint8List?>(
                               future: fetchProfileImage(
@@ -324,6 +324,7 @@ class AdvocateList extends StatelessWidget {
 
                           ],
                         ),
+                      ),
                       ),
                     ),
                   ),
