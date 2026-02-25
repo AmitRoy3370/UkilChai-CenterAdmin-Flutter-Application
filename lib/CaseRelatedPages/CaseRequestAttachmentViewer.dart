@@ -11,7 +11,7 @@ import 'dart:io' show File;
 import 'dart:html' as html;
 import 'dart:ui' as ui;
 import 'dart:ui_web'
-    as ui_web; // Add this import for platformViewRegistry on web
+as ui_web; // Add this import for platformViewRegistry on web
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart'; // Web & Mobile PDF
 import 'package:open_file/open_file.dart'; // Add this for opening files on mobile
 import '../Utils/BaseURL.dart' as BASE_URL;
@@ -169,7 +169,7 @@ class _CaseRequestAttachmentViewState
       if (kIsWeb && contentType != null && contentType!.contains('pdf')) {
         ui_web.platformViewRegistry.registerViewFactory(
           'pdf-viewer-${widget.attachmentId}',
-          (int viewId) => html.IFrameElement()
+              (int viewId) => html.IFrameElement()
             ..src = webUrl
             ..style.border = 'none'
             ..style.width = '100%'

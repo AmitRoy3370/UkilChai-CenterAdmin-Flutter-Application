@@ -14,6 +14,37 @@ class CaseService {
     "Authorization": "Bearer $token",
   };
 
+  String? getMimeType(String? extension) {
+    if (extension == null) return null;
+    extension = extension.toLowerCase();
+    switch (extension) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'pdf':
+        return 'application/pdf';
+      case 'mp4':
+        return 'video/mp4';
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'wav':
+        return 'audio/wav';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'txt':
+        return 'text/plain';
+      case 'json':
+        return 'application/json';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+
   // ================= UPDATE CASE =================
   Future<bool> updateCase({
     required String caseId,
@@ -25,7 +56,7 @@ class CaseService {
     required List<String> existingFiles,
     required List<PlatformFile> newFiles,
   }) async {
-    final uri = Uri.parse("${BASE_URL.Urls().baseURL}/case/update");
+    final uri = Uri.parse("${BASE_URL.Urls().baseURL}case/update");
 
     final request = http.MultipartRequest("POST", uri)
       ..headers.addAll(_headers)
@@ -37,14 +68,27 @@ class CaseService {
       ..fields['usersId'] = usersId
       ..fields['existingFiles'] = jsonEncode(existingFiles);
 
-    for (final file in newFiles) {
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'files',
-          file.bytes!,
-          filename: file.name,
-        ),
-      );
+    if (newFiles.isNotEmpty) {
+      for (final f in newFiles) {
+
+        String? extension = f.extension;
+
+        final mimeTypeStr = getMimeType(extension);
+        http.MediaType? contentType = mimeTypeStr != null ? http.MediaType.parse(mimeTypeStr) : null;
+
+
+        if (f.bytes != null) {
+          // WEB
+          request.files.add(
+            http.MultipartFile.fromBytes("files", f.bytes!, filename: f.name, contentType: contentType),
+          );
+        } else if (f.path != null) {
+          // ANDROID / IOS
+          request.files.add(
+            await http.MultipartFile.fromPath("files", f.path!, contentType: contentType),
+          );
+        }
+      }
     }
 
     final response = await request.send();
@@ -54,7 +98,7 @@ class CaseService {
   // ================= FIND BY ID =================
   Future<CaseModel> findById(String id) async {
     final res = await http.get(
-      Uri.parse("${BASE_URL.Urls().baseURL}/case/$id"),
+      Uri.parse("${BASE_URL.Urls().baseURL}case/$id"),
       headers: _headers,
     );
 
@@ -65,7 +109,7 @@ class CaseService {
   // ================= FIND ALL =================
   Future<List<CaseModel>> findAll() async {
     final res = await http.get(
-      Uri.parse("${BASE_URL.Urls().baseURL}/case/all"),
+      Uri.parse("${BASE_URL.Urls().baseURL}case/all"),
       headers: _headers,
     );
 
@@ -78,7 +122,7 @@ class CaseService {
   // ================= BY USER =================
   Future<List<CaseModel>> byUser(String userId) async {
     final res = await http.get(
-      Uri.parse("${BASE_URL.Urls().baseURL}/case/user/$userId"),
+      Uri.parse("${BASE_URL.Urls().baseURL}case/user/$userId"),
       headers: _headers,
     );
 
@@ -91,7 +135,7 @@ class CaseService {
   // ================= SEARCH =================
   Future<List<CaseModel>> search(String name) async {
     final res = await http.get(
-      Uri.parse("${BASE_URL.Urls().baseURL}/case/search/$name"),
+      Uri.parse("${BASE_URL.Urls().baseURL}case/search/$name"),
       headers: _headers,
     );
 
@@ -104,7 +148,7 @@ class CaseService {
   // ================= DELETE =================
   Future<bool> deleteCase(String caseId, String userId) async {
     final res = await http.delete(
-      Uri.parse("${BASE_URL.Urls().baseURL}/case/$caseId/$userId"),
+      Uri.parse("${BASE_URL.Urls().baseURL}case/$caseId/$userId"),
       headers: _headers,
     );
 
@@ -113,10 +157,10 @@ class CaseService {
 
   // ================= ATTACHMENT URLS =================
   String viewAttachmentUrl(String attachmentId) {
-    return "${BASE_URL.Urls().baseURL}/case/attachment/view/$attachmentId";
+    return "${BASE_URL.Urls().baseURL}case/attachment/view/$attachmentId";
   }
 
   String downloadAttachmentUrl(String attachmentId) {
-    return "${BASE_URL.Urls().baseURL}/case/attachment/$attachmentId";
+    return "${BASE_URL.Urls().baseURL}case/attachment/$attachmentId";
   }
 }

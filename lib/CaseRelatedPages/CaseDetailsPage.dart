@@ -147,8 +147,14 @@ class CaseDetailsPage extends StatelessWidget {
   Future<void> deleteCase(BuildContext context) async {
     final url = "$baseUrl/${caseModel.id}/${caseModel.userId}";
 
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token') ?? '';
+
     try {
-      final response = await http.delete(Uri.parse(url));
+      final response = await http.delete(Uri.parse(url), headers:{
+        "content-type": "application/json",
+        "Authorization": "Bearer $token",
+      });
       final body = jsonDecode(response.body);
 
       if (response.statusCode == 200 && body["success"] == true) {
