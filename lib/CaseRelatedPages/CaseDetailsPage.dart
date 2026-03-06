@@ -371,6 +371,32 @@ class CaseDetailsPage extends StatelessWidget {
 
                 ElevatedButton(
                   onPressed: () async {
+
+                    // Show loader immediately
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false, // user can't close it
+                      builder: (ctx) => const Center(
+                        child: Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(height: 16),
+                                Text(
+                                  "Loading Case Tracking...\nPlease wait",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+
                     SharedPreferences prefs =
                         await SharedPreferences.getInstance();
                     final token = prefs.getString('jwt_token') ?? '';
@@ -414,6 +440,8 @@ class CaseDetailsPage extends StatelessWidget {
                       final body = jsonDecode(response.body);
                       advocateUserId = body["userId"];
                     }
+
+                    Navigator.pop(context); // hide loader
 
                     Navigator.push(
                       context,

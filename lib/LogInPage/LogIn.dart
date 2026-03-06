@@ -245,8 +245,32 @@ class LogInState extends State<LogIn> {
           const SizedBox(height: 20),
 
           ElevatedButton(
-            onPressed: () {
-              _submitForm();
+            onPressed: () async {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: Text("Logging In..."),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text("Please wait while we log you in..."),
+                        SizedBox(height: 8),
+                        Text("This may take a few seconds..."),
+                      ],
+                    ),
+                  );
+                },
+              );
+
+              await _submitForm();
+
+              if (context.mounted) {
+                Navigator.pop(context);
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,

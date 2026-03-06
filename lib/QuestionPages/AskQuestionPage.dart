@@ -170,7 +170,33 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
 
             /// ---------------- SUBMIT ----------------
             ElevatedButton(
-              onPressed: submit,
+              onPressed: () async {
+
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: Text("Asking question...."),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(),
+                          const SizedBox(height: 10),
+                          Text("In process...."),
+                        ],
+                      ),
+                    );
+                  },
+                );
+
+                await submit();
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 minimumSize: const Size(double.infinity, 50),
