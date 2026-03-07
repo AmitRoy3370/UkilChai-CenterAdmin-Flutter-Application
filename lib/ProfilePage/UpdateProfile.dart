@@ -1401,7 +1401,35 @@ class _UpdateProfileState extends State<UpdateProfile> {
 
                               const SizedBox(height: 20),
                               ElevatedButton(
-                                onPressed: _submitForm,
+                                onPressed: () async {
+
+                                  showDialog(
+                                    context: context,
+                                    barrierDismissible: false,
+                                    builder: (BuildContext context) {
+                                      return AlertDialog(
+                                        title: Text("Updating profile...."),
+                                        content: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            CircularProgressIndicator(),
+                                            const SizedBox(height: 20),
+                                            Text("Please wait..."),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  );
+
+                                  await _submitForm();
+
+                                  if(context.mounted) {
+
+                                    Navigator.pop(context);
+
+                                  }
+
+                                },
                                 child: const Text("Update Profile"),
                               ),
                             ],
