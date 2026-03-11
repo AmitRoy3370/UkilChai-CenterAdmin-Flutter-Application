@@ -37,6 +37,7 @@ class QuestionCard extends StatefulWidget {
 class _QuestionCardState extends State<QuestionCard> {
   String currentUserId = "";
   bool isMyQuestion = false;
+  bool isAdmin = false;
 
   PlatformFile? selectedFile; // Unified for web/mobile
   String? fileName;
@@ -84,9 +85,8 @@ class _QuestionCardState extends State<QuestionCard> {
     );
 
     setState(() {
-      isMyQuestion =
-          currentUserId == widget.question.userId ||
-          centerAdminResponse.statusCode == 200;
+      isMyQuestion = currentUserId == widget.question.userId;
+      isAdmin = centerAdminResponse.statusCode == 200;
     });
   }
 
@@ -434,11 +434,12 @@ class _QuestionCardState extends State<QuestionCard> {
                   widget.question.questionType,
                   style: const TextStyle(color: Colors.green),
                 ),
-                if (isMyQuestion)
+                if (isAdmin)
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert),
                     itemBuilder: (context) => [
-                      const PopupMenuItem(value: "edit", child: Text("Edit")),
+                      if (isMyQuestion)
+                        const PopupMenuItem(value: "edit", child: Text("Edit")),
                       const PopupMenuItem(
                         value: "delete",
                         child: Text("Delete"),

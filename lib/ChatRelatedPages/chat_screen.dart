@@ -782,21 +782,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                 ),
                               ),
 
-                            if (isMe)
-                              PopupMenuItem(
-                                value: "delete",
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.delete,
-                                      size: 18,
-                                      color: Colors.red,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text("Delete"),
-                                  ],
-                                ),
+                            PopupMenuItem(
+                              value: "delete",
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.delete,
+                                    size: 18,
+                                    color: Colors.red,
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text("Delete"),
+                                ],
                               ),
+                            ),
                           ];
                         },
                       ),
