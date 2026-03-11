@@ -118,9 +118,7 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
                     },
                     child: Container(
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? Colors.green
-                            : Colors.white70,
+                        color: isSelected ? Colors.green : Colors.white70,
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(color: Colors.green),
                       ),
@@ -171,7 +169,6 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
             /// ---------------- SUBMIT ----------------
             ElevatedButton(
               onPressed: () async {
-
                 showDialog(
                   context: context,
                   barrierDismissible: false,
@@ -195,7 +192,6 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
                 if (context.mounted) {
                   Navigator.pop(context);
                 }
-
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
@@ -248,28 +244,34 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
     }
 
     if (messageCtrl.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a message")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Please enter a message")));
       return;
     }
 
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token') ?? '';
 
-    final uri = Uri.parse("${baseURL.Urls().baseURL}questions/ask"); // From your backend endpoint
+    final uri = Uri.parse(
+      "${baseURL.Urls().baseURL}questions/ask",
+    ); // From your backend endpoint
 
     var request = http.MultipartRequest("POST", uri);
     request.headers["Authorization"] = "Bearer $token";
 
-    request.fields["userId"] = widget.userId; // Assuming usersId is a typo or same as userId; adjust if needed
-    request.fields["usersId"] = widget.userId; // If backend requires both, set accordingly
+    request.fields["userId"] = widget
+        .userId; // Assuming usersId is a typo or same as userId; adjust if needed
+    request.fields["usersId"] =
+        widget.userId; // If backend requires both, set accordingly
     request.fields["message"] = messageCtrl.text.trim();
     request.fields["questionType"] = selectedSpeciality!.apiValue;
 
     if (selectedFile != null) {
       final mimeTypeStr = getMimeType(fileExtension);
-      MediaType? contentType = mimeTypeStr != null ? MediaType.parse(mimeTypeStr) : null;
+      MediaType? contentType = mimeTypeStr != null
+          ? MediaType.parse(mimeTypeStr)
+          : null;
 
       if (kIsWeb) {
         // Web: use bytes
@@ -278,7 +280,8 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
             http.MultipartFile.fromBytes(
               "file",
               selectedFile!.bytes!,
-              filename: selectedFile!.name, // Critical: sets originalFilename in backend
+              filename: selectedFile!
+                  .name, // Critical: sets originalFilename in backend
               contentType: contentType, // Sets proper MIME
             ),
           );
@@ -316,9 +319,9 @@ class _AskQuestionPageState extends State<AskQuestionPage> {
       );
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed: ${response.body}")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed: ${response.body}")));
     }
   }
 

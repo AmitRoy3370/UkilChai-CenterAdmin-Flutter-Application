@@ -65,7 +65,9 @@ class _QuestionListPageState extends State<QuestionListPage> {
             padding: const EdgeInsets.all(12),
             itemCount: questions.length,
             itemBuilder: (context, i) {
-              return QuestionCard(question: questions[i]);
+              return QuestionCard(question: questions[i], refreshMethod: () {
+                setState(() {});
+              });
             },
           );
         },
