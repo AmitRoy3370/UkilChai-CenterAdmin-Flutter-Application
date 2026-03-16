@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:advocatechaicenteradmin/CaseRelatedPages/CaseJudgmentAttachmentViewer.dart';
-import 'package:advocatechaicenteradmin/CaseRelatedPages/payment_service.dart';
+import '../CaseRelatedPages/CaseJudgmentAttachmentViewer.dart';
+import '../CaseRelatedPages/payment_service.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -13,9 +13,9 @@ import 'case_close_service.dart';
 import 'case_judgment_service.dart';
 import 'CaseJudgmentModel.dart';
 
-import 'package:advocatechaicenteradmin/CaseRelatedPages/CaseCloseModel.dart';
-import 'package:advocatechaicenteradmin/CaseRelatedPages/document_draft_service.dart';
-import 'package:advocatechaicenteradmin/CaseRelatedPages/_TimelineStep.dart';
+import '../CaseRelatedPages/CaseCloseModel.dart';
+import '../CaseRelatedPages/document_draft_service.dart';
+import '../CaseRelatedPages/_TimelineStep.dart';
 import '../CaseRelatedPages/payment_details_model.dart';
 import '../CaseRelatedPages/ReadStatusModel.dart';
 import '../CaseRelatedPages/case_tracking_model.dart';
@@ -433,7 +433,7 @@ class _CaseTrackingState extends State<CaseTracking> {
                       if (caseJudgment != null)
                         _caseJudgmentTile(caseJudgment!),
                       const SizedBox(height: 16),
-                      _advocateRatingCard(),
+                      if (widget.userId != null) _advocateRatingCard(),
                     ],
                   ),
                 ),
@@ -464,37 +464,37 @@ class _CaseTrackingState extends State<CaseTracking> {
                       const SizedBox(height: 16),
                       _readStatusCard(),
                       const SizedBox(height: 16),
-                      _caseCloseButton(),
+                      if (widget.userId != null) _caseCloseButton(),
                       const SizedBox(height: 16),
+                      if (widget.userId != null)
+                        ElevatedButton(
+                          onPressed: () {
+                            print(
+                              "in case tracking other user :- ${widget.advocateUserId} and name :- ${widget.caseLawyer} and my name :- ${widget.userName} and my id :- ${widget.userId}",
+                            );
 
-                      ElevatedButton(
-                        onPressed: () {
-                          print(
-                            "in case tracking other user :- ${widget.advocateUserId} and name :- ${widget.caseLawyer} and my name :- ${widget.userName} and my id :- ${widget.userId}",
-                          );
-
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ChatScreen(
-                                otherUser: widget.advocateUserId,
-                                othersName: widget.caseLawyer,
-                                myName: widget.userName,
-                                currentUser: widget.userId,
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ChatScreen(
+                                  otherUser: widget.advocateUserId,
+                                  othersName: widget.caseLawyer,
+                                  myName: widget.userName,
+                                  currentUser: widget.userId,
+                                ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
 
-                        child: Text(
-                          "Chat with ${widget.caseLawyer}",
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                          child: Text(
+                            "Chat with ${widget.caseLawyer}",
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -521,7 +521,10 @@ class _CaseTrackingState extends State<CaseTracking> {
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            Text("Case title :- ${widget.caseName}"),
+            Text(
+              "Case title :- ${widget.caseName}",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
             const SizedBox(height: 8),
             Text("Lawyer : ${widget.caseLawyer}"),
             const SizedBox(height: 8),
