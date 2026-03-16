@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../ChatRelatedPages/chat_screen.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
+import '../Utils/case_stages.dart';
 import 'case_close_service.dart';
 import 'case_judgment_service.dart';
 import 'CaseJudgmentModel.dart';
@@ -15,6 +16,9 @@ import 'CaseJudgmentModel.dart';
 import 'package:advocatechaicenteradmin/CaseRelatedPages/CaseCloseModel.dart';
 import 'package:advocatechaicenteradmin/CaseRelatedPages/document_draft_service.dart';
 import 'package:advocatechaicenteradmin/CaseRelatedPages/_TimelineStep.dart';
+import '../CaseRelatedPages/payment_details_model.dart';
+import '../CaseRelatedPages/ReadStatusModel.dart';
+import '../CaseRelatedPages/case_tracking_model.dart';
 import 'CaseJudgmentModel.dart';
 import 'ScheduleAppealHearingPage.dart';
 import 'case_judgment_service.dart';
@@ -68,6 +72,17 @@ class _CaseTrackingState extends State<CaseTracking> {
   String? ratingId;
   bool ratingLoaded = false;
 
+  List<ReadStatus> readStatuses = [];
+  bool _isUpdatingReadStatus = false;
+
+  List<CaseTrackingStage> caseTrackings = [];
+
+  bool _isUpdatingCaseTracking = false; // ← ADD THIS
+
+  // Payment prices map: stage enum string → price
+  Map<String, double> stagePrices = {}; // ← CHANGE TO
+  Map<String, PaymentDetails> stagePayments = {}; // ← NEW
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +93,34 @@ class _CaseTrackingState extends State<CaseTracking> {
     final prefs = await SharedPreferences.getInstance();
     final myUserId = prefs.getString('userId');
     return myUserId != null && myUserId == widget.userId;
+  }
+
+  Future<List<CaseTrackingStage>> _getCaseTrackingsByCase() async {
+    final response = await http.get(
+      Uri.parse(
+        "${BASE_URL.Urls().baseURL}caseTracking/case/${widget.caseId!}",
+      ),
+      headers: {'Authorization': 'Bearer ${widget.token!}'},
+    );
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((j) => CaseTrackingStage.fromJson(j)).toList();
+    }
+    throw Exception('Failed to load trackings');
+  }
+
+  Future<List<PaymentDetails>> _getPaymentsByCase(String caseId) async {
+    final response = await http.get(
+      Uri.parse("${BASE_URL.Urls().baseURL}payment/case/$caseId"),
+      headers: {'Authorization': 'Bearer ${widget.token!}'},
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => PaymentDetails.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load payments: ${response.statusCode}');
+    }
   }
 
   Future<void> _loadAllData() async {
@@ -144,7 +187,43 @@ class _CaseTrackingState extends State<CaseTracking> {
       "CASE_CLOSING_PAYMENT",
     );
 
-    timelineSteps = [
+    try {
+      print("collecting case trackings....");
+      caseTrackings = await _getCaseTrackingsByCase();
+      caseTrackings.sort((a, b) => a.stageNumber.compareTo(b.stageNumber));
+    } catch (e) {
+      print("error loading case trackings: $e");
+      caseTrackings = [];
+    }
+
+    // Build dynamic timeline from backend sequence
+    // Build dynamic timeline + price from your payment map
+    timelineSteps = caseTrackings.map((ct) {
+      final price = stagePayments[ct.caseStage]?.price;
+      return TimelineStep(
+        title: _prettyStageName(ct.caseStage),
+        subtitle: "Stage ${ct.stageNumber}",
+        date: "",
+        icon: Icons.timeline,
+        color: Colors.deepPurple,
+        completed: true,
+        price: price, // ← THIS WAS MISSING
+      );
+    }).toList();
+
+    // Load payment prices for all stages of this case
+    // Load payment prices for all stages of this case
+    try {
+      final payments = await _getPaymentsByCase(widget.caseId!);
+      setState(() {
+        stagePayments = {for (var p in payments) p.paymentFor.toString(): p};
+      });
+    } catch (e) {
+      print("Error loading stage prices: $e");
+      stagePayments = {};
+    }
+
+    /*timelineSteps = [
       TimelineStep(
         title: "Document Drafting",
         subtitle: hasDraft ? "Status: In Progress" : "Status: Pending",
@@ -198,7 +277,7 @@ class _CaseTrackingState extends State<CaseTracking> {
         completed: caseClose != null && caseClose?.open == false,
         price: closingPrice,
       ),
-    ];
+    ];*/
 
     print("collecting the case judgment.....");
 
@@ -216,8 +295,35 @@ class _CaseTrackingState extends State<CaseTracking> {
           "${caseJudgment?.caseId} ${caseJudgment?.result} ${caseJudgment?.date} of case judgment page",
         );
       }
+
+      // ==================== LOAD READ STATUSES (NEW) ====================
+      try {
+        print("collecting all read statuses....");
+        readStatuses = await _getReadStatusesByCase();
+      } catch (e) {
+        print("error loading read statuses: $e");
+        readStatuses = [];
+      }
     } catch (e) {
       print("error in loading case judgment :- $e");
+    }
+  }
+
+  // ==================== READ STATUS API HELPERS (NEW) ====================
+  Future<List<ReadStatus>> _getReadStatusesByCase() async {
+    final response = await http.get(
+      Uri.parse("${BASE_URL.Urls().baseURL}read-status/case/${widget.caseId!}"),
+      headers: {
+        'Authorization': 'Bearer ${widget.token!}',
+        'content-type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => ReadStatus.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load read statuses: ${response.statusCode}');
     }
   }
 
@@ -286,6 +392,14 @@ class _CaseTrackingState extends State<CaseTracking> {
     }
   }
 
+  String _prettyStageName(String stage) {
+    String name = stage.replaceAll("CASE_", "").replaceAll("_PAYMENT", "");
+    return name
+        .split("_")
+        .map((w) => w[0].toUpperCase() + w.substring(1).toLowerCase())
+        .join(" ");
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -314,13 +428,12 @@ class _CaseTrackingState extends State<CaseTracking> {
                     children: [
                       _caseSummaryCard(),
                       const SizedBox(height: 16),
-                      _timelineCard(),
+                      _caseTrackingCard(),
                       const SizedBox(height: 16),
                       if (caseJudgment != null)
                         _caseJudgmentTile(caseJudgment!),
                       const SizedBox(height: 16),
-                      if(widget.userId != null)
-                        _advocateRatingCard(),
+                      _advocateRatingCard(),
                     ],
                   ),
                 ),
@@ -349,38 +462,39 @@ class _CaseTrackingState extends State<CaseTracking> {
                       const SizedBox(height: 16),
                       _hearingCard(),
                       const SizedBox(height: 16),
-                      if (widget.userId != null) _caseCloseButton(),
+                      _readStatusCard(),
+                      const SizedBox(height: 16),
+                      _caseCloseButton(),
                       const SizedBox(height: 16),
 
-                      if (widget.userId != null)
-                        ElevatedButton(
-                          onPressed: () {
-                            print(
-                              "in case tracking other user :- ${widget.advocateUserId} and name :- ${widget.caseLawyer} and my name :- ${widget.userName} and my id :- ${widget.userId}",
-                            );
+                      ElevatedButton(
+                        onPressed: () {
+                          print(
+                            "in case tracking other user :- ${widget.advocateUserId} and name :- ${widget.caseLawyer} and my name :- ${widget.userName} and my id :- ${widget.userId}",
+                          );
 
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ChatScreen(
-                                  otherUser: widget.advocateUserId,
-                                  othersName: widget.caseLawyer,
-                                  myName: widget.userName,
-                                  currentUser: widget.userId,
-                                ),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatScreen(
+                                otherUser: widget.advocateUserId,
+                                othersName: widget.caseLawyer,
+                                myName: widget.userName,
+                                currentUser: widget.userId,
                               ),
-                            );
-                          },
-
-                          child: Text(
-                            "Chat with ${widget.caseLawyer}",
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
                             ),
+                          );
+                        },
+
+                        child: Text(
+                          "Chat with ${widget.caseLawyer}",
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
+                      ),
                     ],
                   ),
                 ),
@@ -505,12 +619,12 @@ class _CaseTrackingState extends State<CaseTracking> {
         subtitle: Text("Date: ${_formatDate(hearing.issuedDate)}"),
         trailing: hearing.attachmentsId.isNotEmpty
             ? Text(
-                "${hearing.attachmentsId.length} files",
-                style: const TextStyle(
-                  color: Colors.blue,
-                  fontWeight: FontWeight.bold,
-                ),
-              )
+          "${hearing.attachmentsId.length} files",
+          style: const TextStyle(
+            color: Colors.blue,
+            fontWeight: FontWeight.bold,
+          ),
+        )
             : null,
         children: [
           // ---------- ATTACHMENTS ----------
@@ -521,21 +635,21 @@ class _CaseTrackingState extends State<CaseTracking> {
                 children: hearing.attachmentsId
                     .map(
                       (attachmentId) => ListTile(
-                        leading: const Icon(Icons.insert_drive_file),
-                        title: Text(attachmentId),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => HearingAttachmentView(
-                                attachmentId: attachmentId,
-                                jwtToken: widget.token!,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    )
+                    leading: const Icon(Icons.insert_drive_file),
+                    title: Text(attachmentId),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => HearingAttachmentView(
+                            attachmentId: attachmentId,
+                            jwtToken: widget.token!,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                )
                     .toList(),
               ),
             ),
@@ -640,12 +754,12 @@ class _CaseTrackingState extends State<CaseTracking> {
           trailing: draft.attachmentsId.isEmpty
               ? null
               : Text(
-                  "${draft.attachmentsId.length} files",
-                  style: const TextStyle(
-                    color: Colors.blue,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+            "${draft.attachmentsId.length} files",
+            style: const TextStyle(
+              color: Colors.blue,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           onTap: () {
             if (draft.attachmentsId.isNotEmpty) {
               _showDraftAttachmentSheet(draft);
@@ -677,7 +791,7 @@ class _CaseTrackingState extends State<CaseTracking> {
                 const SizedBox(height: 12),
 
                 ...draft.attachmentsId.map(
-                  (attachmentId) => Card(
+                      (attachmentId) => Card(
                     child: ListTile(
                       leading: const Icon(Icons.insert_drive_file),
                       title: Text(attachmentId),
@@ -766,12 +880,12 @@ class _CaseTrackingState extends State<CaseTracking> {
         subtitle: caseJudgment.judgmentAttachmentId == null
             ? null
             : Text(
-                caseJudgment.judgmentAttachmentId!,
-                style: const TextStyle(
-                  color: Colors.blue,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+          caseJudgment.judgmentAttachmentId!,
+          style: const TextStyle(
+            color: Colors.blue,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         onTap: () {
           print(
             "case judgment attachment id :- ${caseJudgment.judgmentAttachmentId}",
@@ -1014,6 +1128,114 @@ class _CaseTrackingState extends State<CaseTracking> {
               child: Text(ratingId == null ? "Submit Rating" : "Update Rating"),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _caseTrackingTile(CaseTrackingStage ct) {
+    final index = caseTrackings.indexOf(ct);
+    final canUp = index > 0;
+    final canDown = index < caseTrackings.length - 1;
+    final currentPayment = stagePayments[ct.caseStage];
+    final currentPrice = currentPayment?.price ?? 0;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: ListTile(
+        leading: const Icon(Icons.timeline, color: Colors.deepPurple),
+        title: Text(
+          _prettyStageName(ct.caseStage),
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text("Stage #${ct.stageNumber}"),
+        trailing: Text(
+          currentPrice > 0 ? "৳${currentPrice.toStringAsFixed(0)}" : "No price",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: currentPrice > 0 ? Colors.green : Colors.grey,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==================== TIMELINE MANAGEMENT CARD ====================
+  Widget _caseTrackingCard() {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Manage Timeline Stages",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            if (caseTrackings.isEmpty)
+              const Text(
+                "No stages added yet",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ...caseTrackings.map(_caseTrackingTile),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==================== READ STATUS UI (NEW) ====================
+  Widget _readStatusCard() {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Read Statuses",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+
+            if (readStatuses.isEmpty)
+              const Text(
+                "No read status submitted yet",
+                style: TextStyle(color: Colors.grey),
+              ),
+
+            ...readStatuses.map(_readStatusTile),
+
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _readStatusTile(ReadStatus rs) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: ListTile(
+        leading: const Icon(Icons.visibility, color: Colors.blue),
+
+        // Title with safe wrapping to prevent overflow
+        title: Text(
+          rs.status,
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+
+        subtitle: Text(
+          "Issued: ${_formatDate(rs.issuedTime)}",
+          style: const TextStyle(color: Colors.grey),
         ),
       ),
     );
