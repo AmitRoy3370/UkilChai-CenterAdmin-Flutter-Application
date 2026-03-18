@@ -27,10 +27,12 @@ class DocumentDraftAttachmentView extends StatefulWidget {
   });
 
   @override
-  State<DocumentDraftAttachmentView> createState() => _DocumentDraftAttachmentViewState();
+  State<DocumentDraftAttachmentView> createState() =>
+      _DocumentDraftAttachmentViewState();
 }
 
-class _DocumentDraftAttachmentViewState extends State<DocumentDraftAttachmentView> {
+class _DocumentDraftAttachmentViewState
+    extends State<DocumentDraftAttachmentView> {
   Uint8List? fileBytes;
   String? contentType;
   String? tempFilePath;
@@ -118,7 +120,7 @@ class _DocumentDraftAttachmentViewState extends State<DocumentDraftAttachmentVie
     if (kIsWeb && contentType != null && contentType!.contains('pdf')) {
       ui_web.platformViewRegistry.registerViewFactory(
         'case-pdf-${widget.attachmentId}',
-            (int viewId) => html.IFrameElement()
+        (int viewId) => html.IFrameElement()
           ..src = webUrl
           ..style.border = 'none'
           ..style.width = '100%'
@@ -190,26 +192,30 @@ class _DocumentDraftAttachmentViewState extends State<DocumentDraftAttachmentVie
 
     // VIDEO
     if (contentType != null && contentType!.startsWith('video/')) {
-      return Column(
-        children: [
-          AspectRatio(
-            aspectRatio: videoController!.value.aspectRatio,
-            child: VideoPlayer(videoController!),
-          ),
-          VideoProgressIndicator(videoController!, allowScrubbing: true),
-          IconButton(
-            icon: Icon(
-              videoController!.value.isPlaying ? Icons.pause : Icons.play_arrow,
+      return SingleChildScrollView(
+        child: Column(
+          children: [
+            AspectRatio(
+              aspectRatio: videoController!.value.aspectRatio,
+              child: VideoPlayer(videoController!),
             ),
-            onPressed: () {
-              setState(() {
+            VideoProgressIndicator(videoController!, allowScrubbing: true),
+            IconButton(
+              icon: Icon(
                 videoController!.value.isPlaying
-                    ? videoController!.pause()
-                    : videoController!.play();
-              });
-            },
-          ),
-        ],
+                    ? Icons.pause
+                    : Icons.play_arrow,
+              ),
+              onPressed: () {
+                setState(() {
+                  videoController!.value.isPlaying
+                      ? videoController!.pause()
+                      : videoController!.play();
+                });
+              },
+            ),
+          ],
+        ),
       );
     }
 
