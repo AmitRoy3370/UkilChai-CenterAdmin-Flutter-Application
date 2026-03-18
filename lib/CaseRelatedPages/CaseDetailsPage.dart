@@ -70,25 +70,22 @@ class CaseDetailsPage extends StatelessWidget {
       headers: {"Authorization": "Bearer $token"},
     );
 
-    if(type == 1) {
-
+    if (type == 1) {
       bool myAdvocate = false;
 
-      if(centerAdminResponse.statusCode == 200) {
-
+      if (centerAdminResponse.statusCode == 200) {
         final centerAdminBody = jsonDecode(centerAdminResponse.body);
         final advocateIds = centerAdminBody["advocates"] as List<dynamic>;
 
         myAdvocate = advocateIds.contains(caseModel.advocateId);
-
       }
 
-      return myUserId != null && (myUserId == caseModel.userId ||
-          (centerAdminResponse.statusCode == 200 && myAdvocate) );
-    }else {
+      return myUserId != null &&
+          (myUserId == caseModel.userId ||
+              (centerAdminResponse.statusCode == 200 && myAdvocate));
+    } else {
       return myUserId != null && (myUserId == caseModel.userId);
     }
-
   }
 
   // ---------------- GET USER NAME ----------------
@@ -151,10 +148,13 @@ class CaseDetailsPage extends StatelessWidget {
     final token = prefs.getString('jwt_token') ?? '';
 
     try {
-      final response = await http.delete(Uri.parse(url), headers:{
-        "content-type": "application/json",
-        "Authorization": "Bearer $token",
-      });
+      final response = await http.delete(
+        Uri.parse(url),
+        headers: {
+          "content-type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      );
       final body = jsonDecode(response.body);
 
       if (response.statusCode == 200 && body["success"] == true) {
@@ -301,20 +301,22 @@ class CaseDetailsPage extends StatelessWidget {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.visibility),
-                          onPressed: () =>  SharedPreferences.getInstance().then((prefs) {
-                            final token = prefs.getString('jwt_token') ?? '';
-                            final userId = prefs.getString('userId') ?? '';
+                          onPressed: () => SharedPreferences.getInstance().then(
+                            (prefs) {
+                              final token = prefs.getString('jwt_token') ?? '';
+                              final userId = prefs.getString('userId') ?? '';
 
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => CaseAttachmentView(
-                                  attachmentId: id,
-                                  jwtToken: token,
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CaseAttachmentView(
+                                    attachmentId: id,
+                                    jwtToken: token,
+                                  ),
                                 ),
-                              ),
-                            );
-                          }),
+                              );
+                            },
+                          ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.download),
@@ -369,99 +371,117 @@ class CaseDetailsPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                ElevatedButton(
-                  onPressed: () async {
+                // ==================== REPLACE THIS ENTIRE BUTTON ====================
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.track_changes),
+                    label: const Text("Case Tracking"),
 
-                    // Show loader immediately
-                    showDialog(
-                      context: context,
-                      barrierDismissible: false, // user can't close it
-                      builder: (ctx) => const Center(
-                        child: Card(
-                          child: Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CircularProgressIndicator(),
-                                SizedBox(height: 16),
-                                Text(
-                                  "Loading Case Tracking...\nPlease wait",
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                              ],
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: const BorderSide(color: Colors.green, width: 1),
+                      ),
+                    ),
+                    onPressed: () async {
+                      // Show loader immediately
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false, // user can't close it
+                        builder: (ctx) => const Center(
+                          child: Card(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    "Loading Case Tracking...\nPlease wait",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 16),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    );
+                      );
 
-                    SharedPreferences prefs =
-                        await SharedPreferences.getInstance();
-                    final token = prefs.getString('jwt_token') ?? '';
-                    final userId = prefs.getString('userId') ?? '';
+                      SharedPreferences prefs =
+                          await SharedPreferences.getInstance();
+                      final token = prefs.getString('jwt_token') ?? '';
+                      final userId = prefs.getString('userId') ?? '';
 
-                    final advocateName = await getNameFromAdvocate(
-                      caseModel.advocateId,
-                    );
+                      final advocateName = await getNameFromAdvocate(
+                        caseModel.advocateId,
+                      );
 
-                    final nameResponse = await http.get(
-                      Uri.parse(
-                        '${BASE_URL.Urls().baseURL}user/search?userId=$userId'),
-                      headers: {
-                        "content-type": "application/json",
-                        "Authorization": "Bearer $token",
-                      },
-                    );
-
-                    String? myName;
-
-                    if (nameResponse.statusCode == 200) {
-                      final body = jsonDecode(nameResponse.body);
-                      myName = body["name"] ?? "";
-                    }
-
-                    print(
-                      "userId :- $userId and case userId :- ${caseModel.userId}",
-                    );
-
-                    String? advocateUserId;
-
-                    final response = await http.get(
-                      Uri.parse("${BASE_URL.Urls().baseURL}advocate/${caseModel.advocateId}"),
-                      headers: {
-                        "content-type": "application/json",
-                        "Authorization": "Bearer $token",
-                      },
-                    );
-
-                    if(response.statusCode == 200) {
-                      final body = jsonDecode(response.body);
-                      advocateUserId = body["userId"];
-                    }
-
-                    Navigator.pop(context); // hide loader
-
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => CaseTracking(
-                          caseId: caseModel.id,
-                          caseName: caseModel.caseName,
-                          caseLawyer: advocateName,
-                          issuedTime: caseModel.issuedTime,
-                          token: token,
-                          advocateUserId: advocateUserId,
-                          userName: myName,
-                          userId: caseModel.userId == userId ? userId : null,
-                          advocateId: caseModel.advocateId,
+                      final nameResponse = await http.get(
+                        Uri.parse(
+                          '${BASE_URL.Urls().baseURL}user/search?userId=$userId',
                         ),
-                      ),
-                    );
-                  },
-                  child: Text("Case Tracking"),
+                        headers: {
+                          "content-type": "application/json",
+                          "Authorization": "Bearer $token",
+                        },
+                      );
+
+                      String? myName;
+
+                      if (nameResponse.statusCode == 200) {
+                        final body = jsonDecode(nameResponse.body);
+                        myName = body["name"] ?? "";
+                      }
+
+                      print(
+                        "userId :- $userId and case userId :- ${caseModel.userId}",
+                      );
+
+                      String? advocateUserId;
+
+                      final response = await http.get(
+                        Uri.parse(
+                          "${BASE_URL.Urls().baseURL}advocate/${caseModel.advocateId}",
+                        ),
+                        headers: {
+                          "content-type": "application/json",
+                          "Authorization": "Bearer $token",
+                        },
+                      );
+
+                      if (response.statusCode == 200) {
+                        final body = jsonDecode(response.body);
+                        advocateUserId = body["userId"];
+                      }
+
+                      Navigator.pop(context);
+
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CaseTracking(
+                            caseId: caseModel.id,
+                            caseName: caseModel.caseName,
+                            caseLawyer: advocateName,
+                            issuedTime: caseModel.issuedTime,
+                            token: token,
+                            advocateUserId: advocateUserId,
+                            userName: myName,
+                            userId: caseModel.userId == userId ? userId : null,
+                            advocateId: caseModel.advocateId,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
+
+                const SizedBox(height: 16),
 
                 FutureBuilder<bool>(
                   future: isMyCase(2),
@@ -497,7 +517,7 @@ class CaseDetailsPage extends StatelessWidget {
                                 icon: const Icon(Icons.gavel),
                                 label: const Text("Case Appeal"),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.deepOrange,
+                                  backgroundColor: Colors.green,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 14,
                                   ),

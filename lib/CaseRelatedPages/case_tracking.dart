@@ -698,7 +698,7 @@ class _CaseTrackingState extends State<CaseTracking> {
                         if (widget.userId != null)
                           ElevatedButton(
                             onPressed: () {
-                              Navigator.push(
+                              final result = Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) =>
@@ -710,6 +710,13 @@ class _CaseTrackingState extends State<CaseTracking> {
                                       ),
                                 ),
                               );
+
+                              if(result == true) {
+                                setState(() {
+                                  _loadFuture = _loadAllData();
+                                });
+                              }
+
                             },
                             child: Text(
                               "Schedule Appeal Hearing",
