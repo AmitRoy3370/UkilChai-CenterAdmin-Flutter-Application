@@ -697,8 +697,8 @@ class _CaseTrackingState extends State<CaseTracking> {
                         ),
                         if (widget.userId != null)
                           ElevatedButton(
-                            onPressed: () {
-                              final result = Navigator.push(
+                            onPressed: () async {
+                              final result = await Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) =>

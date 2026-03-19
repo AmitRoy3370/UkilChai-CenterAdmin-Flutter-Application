@@ -182,7 +182,7 @@ class _SeeAllCasesPageState extends State<SeeAllCasesPage> {
                   final token = prefs.getString('jwt_token') ?? '';
                   final userId = prefs.getString('userId') ?? '';
 
-                  final result = Navigator.push(
+                  final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) =>
