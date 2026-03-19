@@ -15,6 +15,7 @@ import './AppealCasePage.dart';
 import './case_model.dart';
 import 'package:advocatechaicenteradmin/Utils/BaseURL.dart' as BASE_URL;
 import 'package:advocatechaicenteradmin/Auth/AuthService.dart';
+import '../CaseRelatedPages/CaseHomePage.dart';
 
 import 'AttachmentViewer.dart';
 import 'case_tracking.dart';
@@ -234,7 +235,7 @@ class CaseDetailsPage extends StatelessWidget {
                     if (context.mounted) {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => SeeAllCasesPage()),
+                        MaterialPageRoute(builder: (_) => CaseHomePage()),
                       );
 
                       // 🔥 THIS IS THE KEY CHANGE - return true to the previous page

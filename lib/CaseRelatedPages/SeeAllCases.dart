@@ -185,17 +185,22 @@ class _SeeAllCasesPageState extends State<SeeAllCasesPage> {
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) =>
-                          CaseDetailsPage(caseModel: c, userId: userId),
+                      builder: (_) => CaseDetailsPage(
+                        caseModel: c,
+                        userId: userId,
+                        onDeleted: () {
+                          setState(() {
+                            futureCases = fetchMyCases();
+                          });
+                        },
+                      ),
                     ),
                   );
 
-                  if(result == true) {
-
+                  if (result == true) {
                     setState(() {
                       futureCases = fetchMyCases();
                     });
-
                   }
                 },
                 child: Card(
