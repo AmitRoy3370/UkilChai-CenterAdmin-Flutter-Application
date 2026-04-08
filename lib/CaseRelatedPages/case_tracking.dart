@@ -1,33 +1,35 @@
 import 'dart:convert';
 
-import '../CaseRelatedPages/CaseJudgmentAttachmentViewer.dart';
-import '../CaseRelatedPages/payment_service.dart';
+import 'package:advocatechaicenteradmin/CaseRelatedPages/CaseJudgmentAttachmentViewer.dart';
+import 'package:advocatechaicenteradmin/CaseRelatedPages/payment_service.dart';
+import '../CaseRelatedPages/payment_details_model.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../ChatRelatedPages/chat_screen.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
-import '../Utils/case_stages.dart';
+import '../Utils/case_stages.dart' as CASE_STAGES;
+import '../Utils/responsive_helper.dart';
 import 'case_close_service.dart';
 import 'case_judgment_service.dart';
 import 'CaseJudgmentModel.dart';
 
-import '../CaseRelatedPages/CaseCloseModel.dart';
-import '../CaseRelatedPages/document_draft_service.dart';
-import '../CaseRelatedPages/_TimelineStep.dart';
-import '../CaseRelatedPages/payment_details_model.dart';
+import 'package:advocatechaicenteradmin/CaseRelatedPages/CaseCloseModel.dart';
+import 'package:advocatechaicenteradmin/CaseRelatedPages/document_draft_service.dart';
+import 'package:advocatechaicenteradmin/CaseRelatedPages/_TimelineStep.dart';
 import '../CaseRelatedPages/ReadStatusModel.dart';
-import '../CaseRelatedPages/case_tracking_model.dart';
 import 'CaseJudgmentModel.dart';
 import 'ScheduleAppealHearingPage.dart';
 import 'case_judgment_service.dart';
+import 'package:file_picker/file_picker.dart';
 
 import 'AppealHearingModel.dart';
 import 'DocumentDraftAttachmentViewer.dart';
 import 'HearingAttachmentViewer.dart';
 import 'HearingModel.dart';
 import 'appeal_hearing_service.dart';
+import 'case_tracking_model.dart';
 import 'document_draft.dart';
 import 'hearing_service.dart';
 
@@ -71,6 +73,32 @@ class _CaseTrackingState extends State<CaseTracking> {
   int selectedStars = 0;
   String? ratingId;
   bool ratingLoaded = false;
+  String? presentUsersAdvocateId;
+
+  // Add near other state variables
+  bool _isUploadingDraft = false;
+  List<PlatformFile> _selectedDocumentsDraftsNewFiles = [];
+  List<String> _documentDraftsExistingAttachments = []; // for update mode
+  Set<String> _documentDraftsAttachmentsToDelete =
+  {}; // user wants to remove these
+
+  // ====================== HEARING STATES ======================
+  bool _isUploadingHearing = false;
+  List<PlatformFile> _selectedHearingNewFiles = [];
+  List<String> _hearingExistingAttachments = [];
+  Set<String> _hearingAttachmentsToDelete = {};
+
+  // ====================== PRICE STATES ======================
+  bool _isSavingPrice = false;
+
+  TextEditingController _priceController = TextEditingController();
+
+  // ====================== HEARING PRICE RULE STATE ======================
+  int _hearingPriceCount = 0;
+
+  // ====================== JUDGMENT STATES ======================
+  PlatformFile? _selectedJudgmentFile;
+  bool _isUploadingJudgment = false;
 
   List<ReadStatus> readStatuses = [];
   bool _isUpdatingReadStatus = false;
@@ -95,36 +123,13 @@ class _CaseTrackingState extends State<CaseTracking> {
     return myUserId != null && myUserId == widget.userId;
   }
 
-  Future<List<CaseTrackingStage>> _getCaseTrackingsByCase() async {
-    final response = await http.get(
-      Uri.parse(
-        "${BASE_URL.Urls().baseURL}caseTracking/case/${widget.caseId!}",
-      ),
-      headers: {'Authorization': 'Bearer ${widget.token!}'},
-    );
-    if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      return data.map((j) => CaseTrackingStage.fromJson(j)).toList();
-    }
-    throw Exception('Failed to load trackings');
-  }
-
-  Future<List<PaymentDetails>> _getPaymentsByCase(String caseId) async {
-    final response = await http.get(
-      Uri.parse("${BASE_URL.Urls().baseURL}payment/case/$caseId"),
-      headers: {'Authorization': 'Bearer ${widget.token!}'},
-    );
-
-    if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      return data.map((json) => PaymentDetails.fromJson(json)).toList();
-    } else {
-      throw Exception('Failed to load payments: ${response.statusCode}');
-    }
-  }
-
   Future<void> _loadAllData() async {
     final draftService = DocumentDraftService(widget.token!);
+
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    presentUsersAdvocateId = prefs.getString("advocateId");
+
+    print("present users advocate id :- $presentUsersAdvocateId");
 
     try {
       await _loadMyRating();
@@ -144,9 +149,32 @@ class _CaseTrackingState extends State<CaseTracking> {
     }
 
     try {
-      // ---------- HEARINGS ----------
-      hearings = await HearingService.getByCase(widget.token!, widget.caseId!);
-    } catch (e) {}
+      print("collecting all hearings....");
+
+      try {
+        // ---------- HEARINGS ----------
+        hearings = await HearingService.getByCase(
+          widget.token!,
+          widget.caseId!,
+        );
+      } catch (e) {}
+
+      print("collecting all hearing price count....");
+
+      /*_hearingPriceCount = await PaymentService.getHearingPaymentCount(
+        widget.token!,
+        widget.caseId!,
+      );*/
+
+      print(
+        "collected total price set for hearing is :- $_hearingPriceCount and total hearing has :- ${hearings.length}",
+      );
+    } catch (e) {
+      _hearingPriceCount = 0;
+      print(
+        "find some $e for collecting total hearing count and setted hearing price count",
+      );
+    }
 
     try {
       caseClose = await CaseCloseService.findByCaseId(
@@ -309,6 +337,101 @@ class _CaseTrackingState extends State<CaseTracking> {
     }
   }
 
+  Future<List<PaymentDetails>> _getPaymentsByCase(String caseId) async {
+    final response = await http.get(
+      Uri.parse("${BASE_URL.Urls().baseURL}payment/case/$caseId"),
+      headers: {'Authorization': 'Bearer ${widget.token!}'},
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((json) => PaymentDetails.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load payments: ${response.statusCode}');
+    }
+  }
+
+  Future<List<CaseTrackingStage>> _getCaseTrackingsByCase() async {
+    final response = await http.get(
+      Uri.parse(
+        "${BASE_URL.Urls().baseURL}caseTracking/case/${widget.caseId!}",
+      ),
+      headers: {'Authorization': 'Bearer ${widget.token!}'},
+    );
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      return data.map((j) => CaseTrackingStage.fromJson(j)).toList();
+    }
+    throw Exception('Failed to load trackings');
+  }
+
+  Future<bool> _addCaseTracking(String caseStage) async {
+    final userId =
+        widget.advocateUserId ??
+            (await SharedPreferences.getInstance()).getString('userId');
+    final response = await http.post(
+      Uri.parse("${BASE_URL.Urls().baseURL}caseTracking/add/$userId"),
+      headers: {
+        'Authorization': 'Bearer ${widget.token!}',
+        'content-type': 'application/json',
+      },
+      body: jsonEncode({"caseId": widget.caseId!, "caseStage": caseStage}),
+    );
+    return response.statusCode == 200 || response.statusCode == 201;
+  }
+
+  Future<bool> _updateCaseTracking(String id, String caseStage) async {
+    final userId =
+        widget.advocateUserId ??
+            (await SharedPreferences.getInstance()).getString('userId');
+    final response = await http.put(
+      Uri.parse("${BASE_URL.Urls().baseURL}caseTracking/update/$id/$userId"),
+      headers: {
+        'Authorization': 'Bearer ${widget.token!}',
+        'content-type': 'application/json',
+      },
+      body: jsonEncode({"caseId": widget.caseId!, "caseStage": caseStage}),
+    );
+    return response.statusCode == 200 || response.statusCode == 201;
+  }
+
+  Future<bool> _deleteCaseTracking(String id) async {
+    final userId =
+        widget.advocateUserId ??
+            (await SharedPreferences.getInstance()).getString('userId');
+    final response = await http.delete(
+      Uri.parse("${BASE_URL.Urls().baseURL}caseTracking/delete/$id/$userId"),
+      headers: {'Authorization': 'Bearer ${widget.token!}'},
+    );
+    return response.statusCode == 200;
+  }
+
+  Future<bool> _swapCaseTrackings(String id1, String id2) async {
+    final response = await http.put(
+      Uri.parse(
+        "${BASE_URL.Urls().baseURL}caseTracking/swap?caseTrackingId1=$id1&caseTrackingId2=$id2",
+      ),
+      headers: {'Authorization': 'Bearer ${widget.token!}'},
+    );
+    return response.statusCode == 200;
+  }
+
+  String _prettyStageName(String stage) {
+    String shortName = CASE_STAGES.CaseStages.getShortName(stage);
+
+    if (shortName != stage && shortName.length < 25) {
+      return shortName;
+    }
+
+    String name = stage.replaceAll("CASE_", "").replaceAll("_PAYMENT", "");
+    String formatted = name
+        .split("_")
+        .map((w) => w[0].toUpperCase() + w.substring(1).toLowerCase())
+        .join(" ");
+
+    return formatted;
+  }
+
   // ==================== READ STATUS API HELPERS (NEW) ====================
   Future<List<ReadStatus>> _getReadStatusesByCase() async {
     final response = await http.get(
@@ -327,8 +450,878 @@ class _CaseTrackingState extends State<CaseTracking> {
     }
   }
 
+  Future<bool> _addReadStatus(String statusText) async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = widget.advocateUserId ?? prefs.getString('userId');
+    if (userId == null) throw Exception("User ID not found");
+
+    final response = await http.post(
+      Uri.parse("${BASE_URL.Urls().baseURL}read-status/$userId"),
+      headers: {
+        'Authorization': 'Bearer ${widget.token!}',
+        'content-type': 'application/json',
+      },
+      body: jsonEncode({
+        "caseId": widget.caseId!,
+        "advocateId": widget.advocateId!,
+        "status": statusText,
+      }),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return true;
+    } else {
+      throw Exception("Failed to add read status: ${response.statusCode}");
+    }
+  }
+
+  Future<bool> _updateReadStatus(String id, String statusText) async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = widget.advocateUserId ?? prefs.getString('userId');
+    if (userId == null) throw Exception("User ID not found");
+
+    final response = await http.put(
+      Uri.parse("${BASE_URL.Urls().baseURL}read-status/$id/$userId"),
+      headers: {
+        'Authorization': 'Bearer ${widget.token!}',
+        'content-type': 'application/json',
+      },
+      body: jsonEncode({
+        "caseId": widget.caseId!,
+        "advocateId": widget.advocateId!,
+        "status": statusText,
+      }),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return true;
+    } else {
+      throw Exception("Failed to update read status: ${response.statusCode}");
+    }
+  }
+
+  Future<T> _showLoadingDialog<T>({
+    required Future<T> Function() task,
+    String loadingMessage = "Processing...",
+  }) async {
+    if (!mounted) return await task();
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(loadingMessage),
+            ],
+          ),
+        );
+      },
+    );
+
+    try {
+      final result = await task();
+      setState(() => _loadFuture = _loadAllData());
+      if (context.mounted) Navigator.pop(context); // Close loading dialog
+      return result;
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context); // Close loading dialog
+      rethrow;
+    }
+  }
+
   String _formatDate(DateTime date) {
     return DateFormat('dd MMM yyyy').format(date);
+  }
+
+  Future<void> _pickDocumentDraftsFiles() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: FileType.any,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _selectedDocumentsDraftsNewFiles.addAll(
+            result.files.where((f) => f.bytes != null),
+          );
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error picking files: $e")));
+    }
+  }
+
+  void _showDocumentDraftBottomSheet() {
+    final draftService = DocumentDraftService(widget.token!);
+    final isUpdate = documentDrafts != null;
+
+    // For update mode — initialize existing files
+    if (isUpdate && _documentDraftsExistingAttachments.isEmpty) {
+      _documentDraftsExistingAttachments = List.from(
+        documentDrafts!.attachmentsId,
+      );
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Container(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isUpdate
+                            ? "Update Document Draft"
+                            : "Add Document Draft",
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Selected / Existing files list
+                      if (_documentDraftsExistingAttachments.isNotEmpty ||
+                          _selectedDocumentsDraftsNewFiles.isNotEmpty)
+                        Expanded(
+                          child: ListView(
+                            controller: scrollController,
+                            children: [
+                              // Existing files (only in update mode)
+                              ..._documentDraftsExistingAttachments.map((
+                                  attId,
+                                  ) {
+                                final willDelete =
+                                _documentDraftsAttachmentsToDelete.contains(
+                                  attId,
+                                );
+                                return ListTile(
+                                  leading: Icon(
+                                    willDelete
+                                        ? Icons.delete_forever
+                                        : Icons.attach_file,
+                                    color: willDelete
+                                        ? Colors.red
+                                        : Colors.blue,
+                                  ),
+                                  title: Text(
+                                    "File $attId",
+                                    style: TextStyle(
+                                      decoration: willDelete
+                                          ? TextDecoration.lineThrough
+                                          : null,
+                                      color: willDelete ? Colors.red : null,
+                                    ),
+                                  ),
+                                  trailing: IconButton(
+                                    icon: Icon(
+                                      willDelete
+                                          ? Icons.restore
+                                          : Icons.delete_outline,
+                                      color: willDelete
+                                          ? Colors.green
+                                          : Colors.red,
+                                    ),
+                                    onPressed: () {
+                                      setModalState(() {
+                                        if (willDelete) {
+                                          _documentDraftsExistingAttachments
+                                              .remove(attId);
+                                        } else {
+                                          //_documentDraftsExistingAttachments.remove(attId);
+                                        }
+                                      });
+                                    },
+                                  ),
+                                );
+                              }),
+
+                              // Newly selected files
+                              ..._selectedDocumentsDraftsNewFiles
+                                  .asMap()
+                                  .entries
+                                  .map((entry) {
+                                int idx = entry.key;
+                                PlatformFile file = entry.value;
+                                return ListTile(
+                                  leading: const Icon(
+                                    Icons.add_circle,
+                                    color: Colors.green,
+                                  ),
+                                  title: Text(file.name),
+                                  trailing: IconButton(
+                                    icon: const Icon(
+                                      Icons.remove_circle,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed: () {
+                                      setModalState(() {
+                                        _selectedDocumentsDraftsNewFiles
+                                            .removeAt(idx);
+                                      });
+                                    },
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+
+                      const SizedBox(height: 16),
+
+                      // Action buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.attach_file),
+                              label: const Text("Add Files"),
+                              onPressed: () async {
+                                await _pickDocumentDraftsFiles();
+                                setModalState(() {});
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          if (_selectedDocumentsDraftsNewFiles.isNotEmpty ||
+                              _documentDraftsAttachmentsToDelete.isNotEmpty ||
+                              !isUpdate)
+                            ElevatedButton.icon(
+                              icon: _isUploadingDraft
+                                  ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                                  : const Icon(Icons.save),
+                              label: Text(
+                                _isUploadingDraft
+                                    ? "Saving..."
+                                    : (isUpdate ? "Update" : "Save"),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                              ),
+                              onPressed: _isUploadingDraft
+                                  ? null
+                                  : () async {
+                                setModalState(
+                                      () => _isUploadingDraft = true,
+                                );
+
+                                // Disable the button by showing loading state
+                                try {
+                                  bool success;
+
+                                  if (isUpdate) {
+                                    success = await draftService.updateDraft(
+                                      draftId: documentDrafts!.id,
+                                      advocateId:
+                                      documentDrafts!.advocateId,
+                                      caseId: documentDrafts!.caseId,
+                                      userId: widget.advocateUserId!,
+                                      existingFiles:
+                                      _documentDraftsExistingAttachments,
+                                      newFiles:
+                                      _selectedDocumentsDraftsNewFiles,
+                                    );
+                                  } else {
+                                    success = await draftService.addDraft(
+                                      advocateId: widget.advocateId ?? "",
+                                      caseId: widget.caseId!,
+                                      userId: widget.advocateUserId!,
+                                      files:
+                                      _selectedDocumentsDraftsNewFiles,
+                                    );
+                                  }
+
+                                  if (success) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            isUpdate
+                                                ? "✓ Document draft updated successfully"
+                                                : "✓ Document draft created successfully",
+                                          ),
+                                          backgroundColor: Colors.green,
+                                          duration: const Duration(
+                                            seconds: 2,
+                                          ),
+                                        ),
+                                      );
+                                      Navigator.pop(
+                                        context,
+                                      ); // Close bottom sheet
+
+                                      // Update UI
+                                      setState(() {
+                                        _loadFuture = _loadAllData();
+                                        _selectedDocumentsDraftsNewFiles
+                                            .clear();
+                                        _documentDraftsAttachmentsToDelete
+                                            .clear();
+                                        _documentDraftsExistingAttachments
+                                            .clear();
+                                      });
+                                    }
+                                  } else {
+                                    throw Exception("Operation failed");
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(
+                                      context,
+                                    ).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          "✗ Error: ${e.toString()}",
+                                        ),
+                                        backgroundColor: Colors.red,
+                                        duration: const Duration(
+                                          seconds: 3,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } finally {
+                                  setModalState(
+                                        () => _isUploadingDraft = false,
+                                  );
+                                }
+                              },
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _pickJudgmentFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(allowMultiple: false);
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _selectedJudgmentFile = result.files.first;
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error picking file: $e")));
+    }
+  }
+
+  String? _paymentTypeForTitle(String title) {
+    switch (title) {
+    // Basic Case Flow
+      case "Case Request":
+        return "CASE_REQUEST_PAYMENT";
+      case "Document Drafting":
+        return "CASE_DOCUMENT_DRAFT_PAYMENT";
+      case "Hearing Date Issued":
+        return "CASE_HEARING_PAYMENT";
+      case "Appeal":
+        return "CASE_APPEAL_PAYMENT";
+      case "Appeal Hearing":
+        return "CASE_HEARING_APPEAL_PAYMENT";
+      case "Case Close":
+        return "CASE_CLOSING_PAYMENT";
+      case "Judgment":
+        return "CASE_JUDGMENT_PAYMENT";
+      case "Paper Finalize":
+        return "PAPER_FINALIZE_PAYMENT";
+      case "Case Filing / Registration":
+        return "CASE_FILING_PAYMENT";
+
+    // Consultation
+      case "Initial Consultation":
+        return "CASE_INITIAL_CONSULTATION_PAYMENT";
+      case "Legal Advice":
+        return "CASE_LEGAL_ADVICE_PAYMENT";
+      case "Case Review":
+        return "CASE_CASE_REVIEW_PAYMENT";
+      case "Case Evaluation":
+        return "CASE_CASE_EVALUATION_PAYMENT";
+      case "Case Strategy":
+        return "CASE_CASE_STRATEGY_PAYMENT";
+      case "Case Preparation":
+        return "CASE_CASE_PREPARATION_PAYMENT";
+      case "Evidence Collection":
+        return "CASE_EVIDENCE_COLLECTION_PAYMENT";
+      case "Document Review":
+        return "CASE_DOCUMENT_REVIEW_PAYMENT";
+      case "Legal Research":
+        return "CASE_LEGAL_RESEARCH_PAYMENT";
+      case "Case Analysis":
+        return "CASE_CASE_ANALYSIS_PAYMENT";
+
+    // Documentation
+      case "Document Preparation":
+        return "CASE_DOCUMENT_PREPARATION_PAYMENT";
+      case "Document Correction":
+        return "CASE_DOCUMENT_CORRECTION_PAYMENT";
+      case "Document Translation":
+        return "CASE_DOCUMENT_TRANSLATION_PAYMENT";
+      case "Document Notarization":
+        return "CASE_DOCUMENT_NOTARIZATION_PAYMENT";
+      case "Document Verification":
+        return "CASE_DOCUMENT_VERIFICATION_PAYMENT";
+      case "Document Submission":
+        return "CASE_DOCUMENT_SUBMISSION_PAYMENT";
+      case "Document Resubmission":
+        return "CASE_DOCUMENT_RESUBMISSION_PAYMENT";
+      case "Document Updation":
+        return "CASE_DOCUMENT_UPDATION_PAYMENT";
+      case "Document Validation":
+        return "CASE_DOCUMENT_VALIDATION_PAYMENT";
+      case "Document Authentication":
+        return "CASE_DOCUMENT_AUTHENTICATION_PAYMENT";
+
+    // Filing
+      case "Case Registration":
+        return "CASE_REGISTRATION_PAYMENT";
+      case "Case Acceptance":
+        return "CASE_CASE_ACCEPTANCE_PAYMENT";
+      case "Case Admission":
+        return "CASE_CASE_ADMISSION_PAYMENT";
+      case "Case Processing":
+        return "CASE_CASE_PROCESSING_PAYMENT";
+      case "Case Listing":
+        return "CASE_CASE_LISTING_PAYMENT";
+      case "Case Scheduling":
+        return "CASE_CASE_SCHEDULING_PAYMENT";
+      case "Case Relisting":
+        return "CASE_CASE_RELISTING_PAYMENT";
+      case "Case Reopening":
+        return "CASE_CASE_REOPENING_PAYMENT";
+      case "Case Transfer":
+        return "CASE_CASE_TRANSFER_PAYMENT";
+      case "Case Merge":
+        return "CASE_CASE_MERGE_PAYMENT";
+
+    // Evidence
+      case "Evidence Presentation":
+        return "CASE_EVIDENCE_PRESENTATION_PAYMENT";
+      case "Evidence Verification":
+        return "CASE_EVIDENCE_VERIFICATION_PAYMENT";
+      case "Evidence Challenge":
+        return "CASE_EVIDENCE_CHALLENGE_PAYMENT";
+      case "Evidence Admission":
+        return "CASE_EVIDENCE_ADMISSION_PAYMENT";
+      case "Evidence Review":
+        return "CASE_EVIDENCE_REVIEW_PAYMENT";
+      case "Witness Preparation":
+        return "CASE_WITNESS_PREPARATION_PAYMENT";
+      case "Witness Examination":
+        return "CASE_WITNESS_EXAMINATION_PAYMENT";
+      case "Witness Cross Examination":
+        return "CASE_WITNESS_CROSS_EXAMINATION_PAYMENT";
+      case "Expert Opinion":
+        return "CASE_EXPERT_OPINION_PAYMENT";
+      case "Investigation":
+        return "CASE_INVESTIGATION_PAYMENT";
+
+    // Hearing
+      case "Pre Hearing":
+        return "CASE_PRE_HEARING_PAYMENT";
+      case "Interim Hearing":
+        return "CASE_INTERIM_HEARING_PAYMENT";
+      case "Argument Hearing":
+        return "CASE_ARGUMENT_HEARING_PAYMENT";
+      case "Final Argument":
+        return "CASE_FINAL_ARGUMENT_PAYMENT";
+      case "Hearing Reschedule":
+        return "CASE_HEARING_RESCHEDULE_PAYMENT";
+      case "Hearing Extension":
+        return "CASE_HEARING_EXTENSION_PAYMENT";
+      case "Hearing Preparation":
+        return "CASE_HEARING_PREPARATION_PAYMENT";
+      case "Hearing Attendance":
+        return "CASE_HEARING_ATTENDANCE_PAYMENT";
+      case "Hearing Document":
+        return "CASE_HEARING_DOCUMENT_PAYMENT";
+      case "Hearing Review":
+        return "CASE_HEARING_REVIEW_PAYMENT";
+
+    // Appeals
+      case "Appeal Preparation":
+        return "CASE_APPEAL_PREPARATION_PAYMENT";
+      case "Appeal Document":
+        return "CASE_APPEAL_DOCUMENT_PAYMENT";
+      case "Appeal Argument":
+        return "CASE_APPEAL_ARGUMENT_PAYMENT";
+      case "Appeal Review":
+        return "CASE_APPEAL_REVIEW_PAYMENT";
+      case "Appeal Hearing":
+        return "CASE_APPEAL_HEARING_PAYMENT";
+      case "Second Appeal":
+        return "CASE_SECOND_APPEAL_PAYMENT";
+      case "High Court Appeal":
+        return "CASE_HIGH_COURT_APPEAL_PAYMENT";
+      case "Supreme Court Appeal":
+        return "CASE_SUPREME_COURT_APPEAL_PAYMENT";
+      case "Review Petition":
+        return "CASE_REVIEW_PETITION_PAYMENT";
+      case "Revision Petition":
+        return "CASE_REVISION_PETITION_PAYMENT";
+
+    // Settlement
+      case "Mediation":
+        return "CASE_MEDIATION_PAYMENT";
+      case "Arbitration":
+        return "CASE_ARBITRATION_PAYMENT";
+      case "Settlement Negotiation":
+        return "CASE_SETTLEMENT_NEGOTIATION_PAYMENT";
+      case "Out Of Court Settlement":
+        return "CASE_OUT_OF_COURT_SETTLEMENT_PAYMENT";
+      case "Compromise":
+        return "CASE_COMPROMISE_PAYMENT";
+      case "Settlement Document":
+        return "CASE_SETTLEMENT_DOCUMENT_PAYMENT";
+      case "Settlement Review":
+        return "CASE_SETTLEMENT_REVIEW_PAYMENT";
+      case "Settlement Finalization":
+        return "CASE_SETTLEMENT_FINALIZATION_PAYMENT";
+      case "Compensation Claim":
+        return "CASE_COMPENSATION_CLAIM_PAYMENT";
+      case "Compensation Approval":
+        return "CASE_COMPENSATION_APPROVAL_PAYMENT";
+
+    // Judgment
+      case "Judgment Preparation":
+        return "CASE_JUDGMENT_PREPARATION_PAYMENT";
+      case "Judgment Review":
+        return "CASE_JUDGMENT_REVIEW_PAYMENT";
+      case "Judgment Copy":
+        return "CASE_JUDGMENT_COPY_PAYMENT";
+      case "Judgment Certification":
+        return "CASE_JUDGMENT_CERTIFICATION_PAYMENT";
+      case "Judgment Execution":
+        return "CASE_JUDGMENT_EXECUTION_PAYMENT";
+
+    // Closing
+      case "Final Settlement":
+        return "CASE_FINAL_SETTLEMENT_PAYMENT";
+      case "Case Completion":
+        return "CASE_CASE_COMPLETION_PAYMENT";
+      case "Case Archive":
+        return "CASE_CASE_ARCHIVE_PAYMENT";
+      case "Case Record":
+        return "CASE_CASE_RECORD_PAYMENT";
+      case "Document Storage":
+        return "CASE_CASE_DOCUMENT_STORAGE_PAYMENT";
+      case "Case History Preparation":
+        return "CASE_CASE_HISTORY_PREPARATION_PAYMENT";
+      case "Case Summary":
+        return "CASE_CASE_SUMMARY_PAYMENT";
+      case "Case Closure Report":
+        return "CASE_CASE_CLOSURE_REPORT_PAYMENT";
+      case "Final Legal Advice":
+        return "CASE_FINAL_LEGAL_ADVICE_PAYMENT";
+      case "Final Document Handover":
+        return "CASE_FINAL_DOCUMENT_HANDOVER_PAYMENT";
+
+      default:
+        return null;
+    }
+  }
+
+  void _showPriceEditDialog(
+      String title,
+      String? paymentTypeEnumStr,
+      bool isAddMode,
+      ) async {
+    if (paymentTypeEnumStr == null) return;
+
+    final controller = TextEditingController();
+    final currentPayment = stagePayments[paymentTypeEnumStr];
+    if (currentPayment != null)
+      controller.text = currentPayment.price.toStringAsFixed(0);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          isAddMode ? "Set Price for $title" : "Update Price for $title",
+        ),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: "Price (৳)",
+            prefixText: "৳ ",
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final price = double.tryParse(controller.text);
+              if (price == null || price <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("Please enter a valid price > 0"),
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(ctx);
+
+              await _showLoadingDialog(
+                loadingMessage: isAddMode
+                    ? "Setting price..."
+                    : "Updating price...",
+                task: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  final token = prefs.getString('jwt_token');
+                  final userId =
+                      prefs.getString('userId') ?? widget.advocateUserId;
+                  if (userId == null) throw Exception("User ID not found");
+
+                  final url = isAddMode
+                      ? "${BASE_URL.Urls().baseURL}payment/add/$userId"
+                      : "${BASE_URL.Urls().baseURL}payment/update/${currentPayment!.id}/$userId";
+
+                  final response = isAddMode
+                      ? await http.post(
+                    Uri.parse(url),
+                    headers: {
+                      'Authorization': 'Bearer $token',
+                      'Content-Type': 'application/json',
+                    },
+                    body: jsonEncode({
+                      "caseId": widget.caseId,
+                      "paymentFor": paymentTypeEnumStr,
+                      "price": price,
+                      "userId": userId,
+                    }),
+                  )
+                      : await http.put(
+                    Uri.parse(url),
+                    headers: {
+                      'Authorization': 'Bearer $token',
+                      'Content-Type': 'application/json',
+                    },
+                    body: jsonEncode({
+                      "caseId": widget.caseId,
+                      "paymentFor": paymentTypeEnumStr,
+                      "price": price,
+                      "userId": userId,
+                    }),
+                  );
+
+                  if (response.statusCode == 200 ||
+                      response.statusCode == 201) {
+                    await _loadAllData(); // ← LOADER STAYS UNTIL FULL REFRESH
+                  } else {
+                    throw Exception("Failed: ${response.statusCode}");
+                  }
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("✓ Price set to ৳$price"),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                },
+              );
+            },
+            child: Text(isAddMode ? "Set Price" : "Update"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickHearingFiles() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _selectedHearingNewFiles.addAll(
+            result.files.where((f) => f.bytes != null),
+          );
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error picking files: $e")));
+    }
+  }
+
+  Future<void> _showHearingBottomSheet(Hearing? hearing) async {
+    final isUpdate = hearing != null;
+    final nextNumber = hearings.isEmpty
+        ? 1
+        : hearings.map((h) => h.hearingNumber).reduce((a, b) => a > b ? a : b) +
+        1;
+
+    final hearingNumber = isUpdate ? hearing.hearingNumber : nextNumber;
+
+    // Reset lists
+    setState(() {
+      _selectedHearingNewFiles.clear();
+      _hearingAttachmentsToDelete.clear();
+      if (isUpdate) {
+        _hearingExistingAttachments = List.from(hearing.attachmentsId);
+      } else {
+        _hearingExistingAttachments.clear();
+      }
+    });
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return DraggableScrollableSheet(
+            initialChildSize: 0.85,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder: (context, scrollController) {
+              return Container(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isUpdate
+                          ? "Update Hearing #$hearingNumber"
+                          : "Add New Hearing #$hearingNumber",
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    if (_hearingExistingAttachments.isNotEmpty ||
+                        _selectedHearingNewFiles.isNotEmpty)
+                      Expanded(
+                        child: ListView(
+                          controller: scrollController,
+                          children: [
+                            // Existing files
+                            ..._hearingExistingAttachments.map((attId) {
+                              final willDelete = _hearingAttachmentsToDelete
+                                  .contains(attId);
+                              return ListTile(
+                                leading: Icon(
+                                  willDelete
+                                      ? Icons.delete_forever
+                                      : Icons.attach_file,
+                                  color: willDelete ? Colors.red : Colors.blue,
+                                ),
+                                title: Text(
+                                  "File $attId",
+                                  style: TextStyle(
+                                    decoration: willDelete
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                    color: willDelete ? Colors.red : null,
+                                  ),
+                                ),
+                                trailing: IconButton(
+                                  icon: Icon(
+                                    willDelete
+                                        ? Icons.restore
+                                        : Icons.delete_outline,
+                                    color: willDelete
+                                        ? Colors.green
+                                        : Colors.red,
+                                  ),
+                                  onPressed: () => setModalState(() {
+                                    if (willDelete) {
+                                      _hearingAttachmentsToDelete.remove(attId);
+                                    } else {
+                                      _hearingAttachmentsToDelete.add(attId);
+                                    }
+                                  }),
+                                ),
+                              );
+                            }),
+
+                            // New files
+                            ..._selectedHearingNewFiles.asMap().entries.map((
+                                entry,
+                                ) {
+                              final idx = entry.key;
+                              final file = entry.value;
+                              return ListTile(
+                                leading: const Icon(
+                                  Icons.add_circle,
+                                  color: Colors.green,
+                                ),
+                                title: Text(file.name),
+                                trailing: IconButton(
+                                  icon: const Icon(
+                                    Icons.remove_circle,
+                                    color: Colors.red,
+                                  ),
+                                  onPressed: () => setModalState(() {
+                                    _selectedHearingNewFiles.removeAt(idx);
+                                  }),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _submitRating() async {
@@ -392,22 +1385,115 @@ class _CaseTrackingState extends State<CaseTracking> {
     }
   }
 
-  String _prettyStageName(String stage) {
-    String name = stage.replaceAll("CASE_", "").replaceAll("_PAYMENT", "");
-    return name
-        .split("_")
-        .map((w) => w[0].toUpperCase() + w.substring(1).toLowerCase())
-        .join(" ");
+  // ==================== NEW RESPONSIVE HELPERS ====================
+  Widget _buildMainLeftContent(double spacing) {
+    return Column(
+      children: [
+        _caseSummaryCard(),
+        SizedBox(height: spacing),
+        _caseTrackingCard(),
+        SizedBox(height: spacing),
+        if (caseJudgment != null) _caseJudgmentTile(caseJudgment!),
+
+        SizedBox(height: spacing),
+        if (widget.userId != null) _advocateRatingCard(),
+      ],
+    );
+  }
+
+  Widget _buildMainRightContent(double spacing) {
+    return Column(
+      children: [
+        if (documentDrafts != null)
+          _documentDraftTile(documentDrafts!)
+        else
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.description, color: Colors.grey),
+              title: const Text("Document Draft"),
+              subtitle: const Text("Not created yet"),
+            ),
+          ),
+        const SizedBox(height: 16),
+        if (presentUsersAdvocateId != null &&
+            widget.advocateId == presentUsersAdvocateId)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: ElevatedButton.icon(
+              icon: Icon(
+                documentDrafts == null ? Icons.add : Icons.edit,
+                size: 20,
+              ),
+              label: Text(
+                documentDrafts == null
+                    ? "Add Document Draft"
+                    : "Update Document Draft",
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  fontSize: 24,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                minimumSize: const Size(double.infinity, 48),
+              ),
+              onPressed: _showDocumentDraftBottomSheet,
+            ),
+          ),
+        SizedBox(height: spacing),
+        _hearingCard(),
+        SizedBox(height: spacing),
+        _readStatusCard(),
+        SizedBox(height: spacing),
+        if (widget.userId != null) _caseCloseButton(),
+        const SizedBox(height: 16),
+        if (widget.userId != null)
+          ElevatedButton(
+            onPressed: () {
+              print(
+                "in case tracking other user :- ${widget.advocateUserId} and name :- ${widget.caseLawyer} and my name :- ${widget.userName} and my id :- ${widget.userId}",
+              );
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatScreen(
+                    otherUser: widget.advocateUserId,
+                    othersName: widget.caseLawyer,
+                    myName: widget.userName,
+                    currentUser: widget.userId,
+                  ),
+                ),
+              );
+            },
+            child: Text(
+              "Chat with ${widget.caseLawyer}",
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: ResponsiveHelper.fontSize(context, 18),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600; // Mobile / small tablet
+    final padding = ResponsiveHelper.padding(context, 12);
+    final spacing = ResponsiveHelper.padding(context, 12);
+
     return Scaffold(
       backgroundColor: Colors.white70,
       appBar: AppBar(
         title: const Text("Ukil App"),
         centerTitle: true,
         backgroundColor: Colors.green,
+        toolbarHeight: ResponsiveHelper.buttonHeight(context) * 1.2,
       ),
       body: FutureBuilder(
         future: _loadFuture,
@@ -416,88 +1502,28 @@ class _CaseTrackingState extends State<CaseTracking> {
             return const Center(child: CircularProgressIndicator());
           }
 
+          // ================= RESPONSIVE LAYOUT =================
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Row(
+            physics: const AlwaysScrollableScrollPhysics(),
+            scrollDirection: Axis.vertical,
+
+            child: isSmallScreen
+                ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ================= LEFT SIDE =================
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    children: [
-                      _caseSummaryCard(),
-                      const SizedBox(height: 16),
-                      _caseTrackingCard(),
-                      const SizedBox(height: 16),
-                      if (caseJudgment != null)
-                        _caseJudgmentTile(caseJudgment!),
-                      const SizedBox(height: 16),
-                      if (widget.userId != null) _advocateRatingCard(),
-                    ],
-                  ),
-                ),
-
+                _buildMainLeftContent(spacing),
+                SizedBox(height: spacing * 2),
+                _buildMainRightContent(spacing),
+              ],
+            )
+                : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // LEFT SIDE (Timeline, Summary, Judgment, Rating)
+                Expanded(flex: 2, child: _buildMainLeftContent(spacing)),
                 const SizedBox(width: 16),
-
-                // ================= RIGHT SIDE (HEARINGS) =================
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    children: [
-                      if (documentDrafts != null)
-                        _documentDraftTile(documentDrafts!)
-                      else
-                        Card(
-                          child: ListTile(
-                            leading: Icon(
-                              Icons.description,
-                              color: Colors.grey,
-                            ),
-                            title: Text("Document Draft"),
-                            subtitle: Text("Not created yet"),
-                          ),
-                        ),
-
-                      const SizedBox(height: 16),
-                      _hearingCard(),
-                      const SizedBox(height: 16),
-                      _readStatusCard(),
-                      const SizedBox(height: 16),
-                      if (widget.userId != null) _caseCloseButton(),
-                      const SizedBox(height: 16),
-                      if (widget.userId != null)
-                        ElevatedButton(
-                          onPressed: () {
-                            print(
-                              "in case tracking other user :- ${widget.advocateUserId} and name :- ${widget.caseLawyer} and my name :- ${widget.userName} and my id :- ${widget.userId}",
-                            );
-
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ChatScreen(
-                                  otherUser: widget.advocateUserId,
-                                  othersName: widget.caseLawyer,
-                                  myName: widget.userName,
-                                  currentUser: widget.userId,
-                                ),
-                              ),
-                            );
-                          },
-
-                          child: Text(
-                            "Chat with ${widget.caseLawyer}",
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                // RIGHT SIDE (Draft, Hearings, Read Status, Close, Chat)
+                Expanded(flex: 1, child: _buildMainRightContent(spacing)),
               ],
             ),
           );
@@ -506,29 +1532,81 @@ class _CaseTrackingState extends State<CaseTracking> {
     );
   }
 
+  // Responsive Button Helper
+  Widget _buildResponsiveButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    required Color color,
+    Color textColor = Colors.white,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: ResponsiveHelper.buttonHeight(context),
+      child: ElevatedButton.icon(
+        icon: Icon(icon, size: ResponsiveHelper.iconSize(context, 18)),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: ResponsiveHelper.fontSize(context, 14),
+            color: textColor,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(
+              ResponsiveHelper.cardRadius(context) * 0.6,
+            ),
+          ),
+        ),
+        onPressed: onPressed,
+      ),
+    );
+  }
+
   // ================= CASE SUMMARY =================
   Widget _caseSummaryCard() {
+    final padding = ResponsiveHelper.padding(context, 12);
+    final fontSize = ResponsiveHelper.fontSize(context, 18);
+    final subFontSize = ResponsiveHelper.fontSize(context, 14);
+
     return Card(
       elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(
+          ResponsiveHelper.cardRadius(context),
+        ),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(padding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               "Case Summary",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: ResponsiveHelper.padding(context, 12)),
             Text(
               "Case title :- ${widget.caseName}",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              style: TextStyle(fontSize: subFontSize),
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 8),
-            Text("Lawyer : ${widget.caseLawyer}"),
-            const SizedBox(height: 8),
-            Text("Issued Time : ${widget.issuedTime}"),
+            SizedBox(height: ResponsiveHelper.padding(context, 6)),
+            Text(
+              "Lawyer : ${widget.caseLawyer}",
+              style: TextStyle(fontSize: subFontSize),
+              overflow: TextOverflow.ellipsis,
+            ),
+            SizedBox(height: ResponsiveHelper.padding(context, 6)),
+            Text(
+              "Issued Time : ${widget.issuedTime}",
+              style: TextStyle(fontSize: subFontSize),
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
         ),
       ),
@@ -548,6 +1626,35 @@ class _CaseTrackingState extends State<CaseTracking> {
   }
 
   Widget _timelineTile(TimelineStep step) {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+            presentUsersAdvocateId == widget.advocateId;
+
+    final matchingStage = caseTrackings.firstWhere(
+          (ct) => _prettyStageName(ct.caseStage) == step.title,
+      orElse: () =>
+          CaseTrackingStage(caseId: "", caseStage: "", stageNumber: 0),
+    );
+
+    final stageEnumStr = matchingStage.caseStage.isNotEmpty
+        ? matchingStage.caseStage
+        : null;
+    final currentPayment = stageEnumStr != null
+        ? stagePayments[stageEnumStr]
+        : null;
+    final currentPrice = currentPayment?.price ?? 0;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Better breakpoint for very small phones
+    final isVerySmallScreen = screenWidth < 380;
+
+    // Responsive sizes
+    final iconSize = isVerySmallScreen
+        ? ResponsiveHelper.iconSize(context, 18)
+        : ResponsiveHelper.iconSize(context, 20);
+    final priceFontSize = ResponsiveHelper.fontSize(context, 14);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -567,46 +1674,191 @@ class _CaseTrackingState extends State<CaseTracking> {
                   ),
                 ),
                 Text(step.subtitle),
-                if (step.date != null)
+                if (step.date != null && step.date!.isNotEmpty)
                   Text(step.date!, style: const TextStyle(color: Colors.grey)),
               ],
             ),
           ),
 
-          // PRICE ON RIGHT
-          if (step.price != null)
-            Text(
-              "৳${step.price}",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Colors.green,
-              ),
+          if (isAdvocate)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (currentPrice > 0)
+                  Text(
+                    "৳${currentPrice.toStringAsFixed(0)}",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: priceFontSize,
+                      color: Colors.green,
+                    ),
+                  )
+                else
+                  Text(
+                    "No price",
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: priceFontSize - 1,
+                    ),
+                  ),
+
+                const SizedBox(width: 8),
+
+                IconButton(
+                  icon: Icon(
+                    currentPrice > 0 ? Icons.edit : Icons.add_circle,
+                    color: Colors.green,
+                    size: iconSize,
+                  ),
+                  onPressed: () => _showPriceEditDialog(
+                    step.title,
+                    stageEnumStr,
+                    currentPayment == null,
+                  ),
+                ),
+
+                if (currentPrice > 0) // ← DELETE BUTTON
+                  IconButton(
+                    icon: Icon(Icons.delete, color: Colors.red, size: iconSize),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text("Delete Price"),
+                          content: const Text("Delete this stage price?"),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text("Cancel"),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                              ),
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text("Delete"),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirm != true) return;
+
+                      await _showLoadingDialog(
+                        loadingMessage: "Deleting price...",
+                        task: () async {
+                          final prefs = await SharedPreferences.getInstance();
+                          final userId =
+                              prefs.getString('userId') ??
+                                  widget.advocateUserId;
+                          final token = prefs.getString('jwt_token');
+
+                          final response = await http.delete(
+                            Uri.parse(
+                              "${BASE_URL.Urls().baseURL}payment/${currentPayment!.id}/$userId",
+                            ),
+                            headers: {'Authorization': 'Bearer $token'},
+                          );
+
+                          return response.statusCode == 200;
+                        },
+                      );
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("✓ Price deleted"),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                        setState(() => _loadFuture = _loadAllData());
+                      }
+                    },
+                  ),
+              ],
             ),
         ],
       ),
     );
   }
 
-  // ================= HEARING CARD =================
+  // ================ Hearing Card ===============
   Widget _hearingCard() {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+            presentUsersAdvocateId == widget.advocateId;
+
+    // Correct logic: To add the NEXT hearing, price for it must be set first
+    final canAddNextHearing = _hearingPriceCount >= hearings.length + 1;
+
+    final padding = ResponsiveHelper.padding(context, 12);
+    final titleSize = ResponsiveHelper.fontSize(context, 18);
+
+    print(
+      "total set hearing for price :- $_hearingPriceCount and total hearing :- ${hearings.length}",
+    );
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(padding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               "Hearings",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: titleSize,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: ResponsiveHelper.padding(context, 12)),
 
-            if (hearings.isEmpty) const Text("No hearing scheduled"),
+            if (hearings.isEmpty)
+              Text(
+                "No hearing scheduled",
+                style: TextStyle(
+                  fontSize: ResponsiveHelper.fontSize(context, 14),
+                  color: Colors.grey,
+                ),
+              ),
 
             ...hearings.map(_hearingTile),
+
+            SizedBox(height: ResponsiveHelper.padding(context, 12)),
+
+            if (isAdvocate)
+              Column(
+                children: [
+                  // 1. Hearing Price button - only when next price is NOT set
+                  if (!canAddNextHearing)
+                    _buildResponsiveButton(
+                      icon: Icons.attach_money,
+                      label: "Set Price for Hearing #${hearings.length + 1}",
+                      color: Colors.green,
+                      onPressed: () {
+                        _showPriceEditDialog(
+                          "Hearing #${hearings.length + 1}",
+                          "CASE_HEARING_PAYMENT",
+                          true,
+                        );
+                      },
+                    ),
+
+                  // 2. Add Hearing button - only when price is already set
+                  if (canAddNextHearing)
+                    _buildResponsiveButton(
+                      icon: Icons.add,
+                      label: "Add New Hearing",
+                      color: Colors.green,
+                      onPressed: () async {
+                        await _showHearingBottomSheet(null);
+                        setState(() => _loadFuture = _loadAllData());
+                      },
+                    ),
+                ],
+              ),
           ],
         ),
       ),
@@ -614,26 +1866,68 @@ class _CaseTrackingState extends State<CaseTracking> {
   }
 
   Widget _hearingTile(Hearing hearing) {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+            presentUsersAdvocateId == widget.advocateId;
+
+    // Get price for this specific hearing (using hearing number)
+    final paymentType = "CASE_HEARING_PAYMENT"; // same type for all hearings
+    // We will show the price fetched for the case, but button allows update
+
+    final titleSize = ResponsiveHelper.fontSize(context, 15);
+    final subSize = ResponsiveHelper.fontSize(context, 12);
+
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: EdgeInsets.symmetric(
+        vertical: ResponsiveHelper.padding(context, 6),
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(
+          ResponsiveHelper.cardRadius(context) * 0.7,
+        ),
+      ),
+
       child: ExpansionTile(
-        leading: const Icon(Icons.gavel),
-        title: Text("Hearing #${hearing.hearingNumber}"),
-        subtitle: Text("Date: ${_formatDate(hearing.issuedDate)}"),
+        leading: Icon(
+          Icons.gavel,
+          size: ResponsiveHelper.iconSize(context, 20),
+        ),
+        title: Row(
+          children: [
+            Text(
+              "Hearing #${hearing.hearingNumber}",
+              style: TextStyle(
+                fontSize: titleSize,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+        subtitle: Text(
+          "Date: ${_formatDate(hearing.issuedDate)}",
+          style: TextStyle(fontSize: subSize),
+        ),
         trailing: hearing.attachmentsId.isNotEmpty
-            ? Text(
-          "${hearing.attachmentsId.length} files",
-          style: const TextStyle(
-            color: Colors.blue,
-            fontWeight: FontWeight.bold,
-          ),
+            ? Column(
+          children: [
+            Text(
+              "${hearing.attachmentsId.length} files",
+              style: const TextStyle(
+                color: Colors.blue,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         )
             : null,
         children: [
           // ---------- ATTACHMENTS ----------
           if (hearing.attachmentsId.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(
+                horizontal: ResponsiveHelper.padding(context, 12),
+              ),
               child: Column(
                 children: hearing.attachmentsId
                     .map(
@@ -697,8 +1991,8 @@ class _CaseTrackingState extends State<CaseTracking> {
                         ),
                         if (widget.userId != null)
                           ElevatedButton(
-                            onPressed: () async {
-                              final result = await Navigator.push(
+                            onPressed: () {
+                              final result = Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) =>
@@ -711,12 +2005,9 @@ class _CaseTrackingState extends State<CaseTracking> {
                                 ),
                               );
 
-                              if(result == true) {
-                                setState(() {
-                                  _loadFuture = _loadAllData();
-                                });
+                              if (result == true) {
+                                setState(() => _loadFuture = _loadAllData());
                               }
-
                             },
                             child: Text(
                               "Schedule Appeal Hearing",
@@ -758,16 +2049,97 @@ class _CaseTrackingState extends State<CaseTracking> {
       child: Card(
         margin: const EdgeInsets.symmetric(vertical: 6),
         child: ListTile(
-          leading: const Icon(Icons.description, color: Colors.orange),
+          leading: const Icon(Icons.description, color: Colors.green),
           title: const Text("Document Draft"),
           subtitle: Text("Issued: ${_formatDate(draft.issuedDate)}"),
           trailing: draft.attachmentsId.isEmpty
               ? null
-              : Text(
-            "${draft.attachmentsId.length} files",
-            style: const TextStyle(
-              color: Colors.blue,
-              fontWeight: FontWeight.bold,
+              : SizedBox(
+            width: 110,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  "${draft.attachmentsId.length} files",
+                  style: const TextStyle(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (presentUsersAdvocateId != null &&
+                    widget.advocateId == presentUsersAdvocateId)
+                  IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () async {
+                      // Show confirmation dialog
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text("Delete Document Draft"),
+                          content: const Text(
+                            "Are you sure you want to delete this document draft?",
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(context, false),
+                              child: const Text("Cancel"),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                              ),
+                              onPressed: () =>
+                                  Navigator.pop(context, true),
+                              child: const Text("Delete"),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirm != true) return;
+
+                      await _showLoadingDialog(
+                        loadingMessage: "Deleting document draft...",
+                        task: () async {
+                          SharedPreferences prefs =
+                          await SharedPreferences.getInstance();
+                          final token = prefs.getString('jwt_token');
+                          final userId = prefs.getString('userId');
+
+                          final response = await http.delete(
+                            Uri.parse(
+                              "${BASE_URL.Urls().baseURL}document-draft/${draft.id}?userId=$userId",
+                            ),
+                            headers: {
+                              'Authorization': 'Bearer $token',
+                              'content-type': 'application/json',
+                            },
+                          );
+
+                          if (response.statusCode == 200) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "✓ Document draft deleted successfully",
+                                  ),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                              setState(() {
+                                _loadFuture = _loadAllData();
+                              });
+                            }
+                          } else {
+                            throw Exception("Failed to delete");
+                          }
+                        },
+                      );
+                    },
+                  ),
+              ],
             ),
           ),
           onTap: () {
@@ -872,12 +2244,17 @@ class _CaseTrackingState extends State<CaseTracking> {
   }
 
   Widget _caseJudgmentTile(CaseJudgment caseJudgment) {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+            presentUsersAdvocateId == widget.advocateId;
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: Colors.white,
       child: ListTile(
-        leading: const Icon(Icons.description, color: Colors.orange),
+        dense: true,
+        leading: const Icon(Icons.description, color: Colors.green),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -896,28 +2273,18 @@ class _CaseTrackingState extends State<CaseTracking> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        onTap: () {
-          print(
-            "case judgment attachment id :- ${caseJudgment.judgmentAttachmentId}",
-          );
 
-          if (caseJudgment.judgmentAttachmentId != null) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => CaseJudgmentAttachmentView(
-                  attachmentId: caseJudgment.judgmentAttachmentId!,
-                  jwtToken: widget.token!,
-                ),
-              ),
-            );
-
-            CaseJudgmentAttachmentView(
+        onTap: caseJudgment.judgmentAttachmentId != null
+            ? () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CaseJudgmentAttachmentView(
               attachmentId: caseJudgment.judgmentAttachmentId!,
               jwtToken: widget.token!,
-            );
-          }
-        },
+            ),
+          ),
+        )
+            : null,
       ),
     );
   }
@@ -1100,17 +2467,25 @@ class _CaseTrackingState extends State<CaseTracking> {
   }
 
   Widget _advocateRatingCard() {
+    final padding = ResponsiveHelper.padding(context, 12);
+    final titleSize = ResponsiveHelper.fontSize(context, 18);
+    final starSize = ResponsiveHelper.iconSize(context, 30);
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: EdgeInsets.all(padding),
+
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               "Rate Advocate",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: titleSize,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            const SizedBox(height: 10),
+            SizedBox(height: ResponsiveHelper.padding(context, 10)),
 
             Row(
               children: List.generate(5, (index) {
@@ -1118,20 +2493,29 @@ class _CaseTrackingState extends State<CaseTracking> {
                   icon: Icon(
                     index < selectedStars ? Icons.star : Icons.star_border,
                     color: Colors.amber,
-                    size: 30,
+                    size: starSize,
                   ),
                   onPressed: () {
                     setState(() {
                       selectedStars = index + 1;
                     });
                   },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 );
               }),
             ),
 
-            Text("Score: ${selectedStars * 20} / 100"),
+            Text(
+              "Score: ${selectedStars * 20} / 100",
+              style: TextStyle(
+                fontSize: ResponsiveHelper.fontSize(context, 14),
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
 
-            const SizedBox(height: 10),
+            SizedBox(height: ResponsiveHelper.padding(context, 10)),
 
             ElevatedButton(
               onPressed: selectedStars == 0 ? null : _submitRating,
@@ -1143,63 +2527,12 @@ class _CaseTrackingState extends State<CaseTracking> {
     );
   }
 
-  Widget _caseTrackingTile(CaseTrackingStage ct) {
-    final index = caseTrackings.indexOf(ct);
-    final canUp = index > 0;
-    final canDown = index < caseTrackings.length - 1;
-    final currentPayment = stagePayments[ct.caseStage];
-    final currentPrice = currentPayment?.price ?? 0;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: ListTile(
-        leading: const Icon(Icons.timeline, color: Colors.deepPurple),
-        title: Text(
-          _prettyStageName(ct.caseStage),
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text("Stage #${ct.stageNumber}"),
-        trailing: Text(
-          currentPrice > 0 ? "৳${currentPrice.toStringAsFixed(0)}" : "No price",
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: currentPrice > 0 ? Colors.green : Colors.grey,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ==================== TIMELINE MANAGEMENT CARD ====================
-  Widget _caseTrackingCard() {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Manage Timeline Stages",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            if (caseTrackings.isEmpty)
-              const Text(
-                "No stages added yet",
-                style: TextStyle(color: Colors.grey),
-              ),
-            ...caseTrackings.map(_caseTrackingTile),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ==================== READ STATUS UI (NEW) ====================
   Widget _readStatusCard() {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+            presentUsersAdvocateId == widget.advocateId;
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1223,6 +2556,20 @@ class _CaseTrackingState extends State<CaseTracking> {
             ...readStatuses.map(_readStatusTile),
 
             const SizedBox(height: 16),
+
+            if (isAdvocate)
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text(
+                  "Add New Read Status",
+                  style: TextStyle(color: Colors.white, fontSize: 24),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  minimumSize: const Size(double.infinity, 48),
+                ),
+                onPressed: () => _showReadStatusBottomSheet(null),
+              ),
           ],
         ),
       ),
@@ -1230,6 +2577,10 @@ class _CaseTrackingState extends State<CaseTracking> {
   }
 
   Widget _readStatusTile(ReadStatus rs) {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+            presentUsersAdvocateId == widget.advocateId;
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
@@ -1246,6 +2597,510 @@ class _CaseTrackingState extends State<CaseTracking> {
         subtitle: Text(
           "Issued: ${_formatDate(rs.issuedTime)}",
           style: const TextStyle(color: Colors.grey),
+        ),
+
+        // ✅ THREE DOT MENU (Popup) - Compact & No Overflow
+        trailing: isAdvocate
+            ? PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: Colors.grey),
+          onSelected: (value) async {
+            if (value == "edit") {
+              _showReadStatusBottomSheet(rs);
+            } else if (value == "delete") {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text("Delete Read Status"),
+                  content: const Text(
+                    "Are you sure you want to delete this read status?",
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text("Cancel"),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                      ),
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text("Delete"),
+                    ),
+                  ],
+                ),
+              );
+
+              if (confirm != true) return;
+
+              await _showLoadingDialog(
+                loadingMessage: "Deleting read status...",
+                task: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  final userId =
+                      widget.advocateUserId ?? prefs.getString('userId');
+                  if (userId == null)
+                    throw Exception("User ID not found");
+
+                  final response = await http.delete(
+                    Uri.parse(
+                      "${BASE_URL.Urls().baseURL}read-status/${rs.id}/$userId",
+                    ),
+                    headers: {'Authorization': 'Bearer ${widget.token!}'},
+                  );
+
+                  if (response.statusCode == 200) {
+                    return true;
+                  } else {
+                    throw Exception("Failed to delete");
+                  }
+                },
+              );
+
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("✓ Read status deleted successfully"),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+                setState(() {
+                  _loadFuture = _loadAllData();
+                });
+              }
+            }
+          },
+          itemBuilder: (context) => [
+            const PopupMenuItem<String>(
+              value: "edit",
+              child: ListTile(
+                leading: Icon(Icons.edit, color: Colors.green),
+                title: Text("Edit"),
+              ),
+            ),
+            const PopupMenuItem<String>(
+              value: "delete",
+              child: ListTile(
+                leading: Icon(Icons.delete, color: Colors.red),
+                title: Text("Delete"),
+              ),
+            ),
+          ],
+        )
+            : null,
+      ),
+    );
+  }
+
+  void _showReadStatusBottomSheet(ReadStatus? existing) {
+    final isUpdate = existing != null;
+    final statusController = TextEditingController(
+      text: existing?.status ?? "",
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return DraggableScrollableSheet(
+            initialChildSize: 0.6,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder: (context, scrollController) {
+              return Container(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isUpdate ? "Update Read Status" : "Add New Read Status",
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: statusController,
+                      decoration: const InputDecoration(
+                        labelText: "Read Status",
+                        hintText: "e.g. Case file reviewed by advocate",
+                      ),
+                      maxLines: 4,
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      icon: _isUpdatingReadStatus
+                          ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                          : const Icon(Icons.save),
+                      label: Text(
+                        _isUpdatingReadStatus
+                            ? "Saving..."
+                            : (isUpdate ? "Update" : "Save"),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      onPressed: _isUpdatingReadStatus
+                          ? null
+                          : () async {
+                        setModalState(() => _isUpdatingReadStatus = true);
+
+                        try {
+                          final success = isUpdate
+                              ? await _updateReadStatus(
+                            existing!.id!,
+                            statusController.text,
+                          )
+                              : await _addReadStatus(
+                            statusController.text,
+                          );
+
+                          if (success) {
+                            await _loadAllData(); // ← LOADER STAYS UNTIL FULL REFRESH
+                          } else {
+                            throw Exception(
+                              "Failed to do the changes at here....",
+                            );
+                          }
+
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isUpdate
+                                      ? "✓ Read status updated successfully"
+                                      : "✓ Read status added successfully",
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                            Navigator.pop(context);
+
+                            setState(() {
+                              _loadFuture = _loadAllData();
+                            });
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("✗ Error: $e"),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } finally {
+                          setModalState(
+                                () => _isUpdatingReadStatus = false,
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  // ==================== TIMELINE MANAGEMENT CARD ====================
+  Widget _caseTrackingCard() {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+            presentUsersAdvocateId == widget.advocateId;
+
+    final padding = ResponsiveHelper.padding(context, 12);
+    final titleSize = ResponsiveHelper.fontSize(context, 18);
+
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(
+          ResponsiveHelper.cardRadius(context),
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(padding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Timeline Stages",
+              style: TextStyle(
+                fontSize: titleSize,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: ResponsiveHelper.padding(context, 12)),
+
+            if (caseTrackings.isEmpty)
+              Text(
+                "No stages added yet",
+                style: TextStyle(
+                  fontSize: ResponsiveHelper.fontSize(context, 14),
+                  color: Colors.grey,
+                ),
+              ),
+            ...caseTrackings.map(_caseTrackingTile),
+            const SizedBox(height: 16),
+            if (isAdvocate)
+              _buildResponsiveButton(
+                icon: Icons.add,
+                label: "Add New Stage",
+                color: Colors.green,
+                onPressed: () => _showCaseTrackingBottomSheet(null),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCaseTrackingBottomSheet(CaseTrackingStage? existing) {
+    final isUpdate = existing != null;
+    String? selectedStage = existing?.caseStage;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return DraggableScrollableSheet(
+            initialChildSize: 0.55,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            expand: false,
+            builder: (context, scrollController) {
+              return Container(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isUpdate
+                          ? "Update Timeline Stage"
+                          : "Add New Timeline Stage",
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    DropdownButtonFormField<String>(
+                      value: selectedStage,
+                      decoration: const InputDecoration(
+                        labelText: "Select Stage",
+                        border: OutlineInputBorder(),
+                      ),
+                      items: CASE_STAGES.CaseStages().allCasePaymentStages.map((
+                          stage,
+                          ) {
+                        return DropdownMenuItem<String>(
+                          value: stage,
+                          child: Text(_prettyStageName(stage)),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setModalState(() => selectedStage = value);
+                      },
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    ElevatedButton.icon(
+                      icon: _isUpdatingCaseTracking
+                          ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                          : const Icon(Icons.save),
+                      label: Text(
+                        _isUpdatingCaseTracking
+                            ? "Saving..."
+                            : (isUpdate ? "Update" : "Save"),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      onPressed:
+                      (_isUpdatingCaseTracking || selectedStage == null)
+                          ? null
+                          : () async {
+                        setModalState(
+                              () => _isUpdatingCaseTracking = true,
+                        );
+
+                        try {
+                          await _showLoadingDialog(
+                            loadingMessage: "Saving stage...",
+                            task: () async {
+                              final success = isUpdate
+                                  ? await _updateCaseTracking(
+                                existing!.id!,
+                                selectedStage!,
+                              )
+                                  : await _addCaseTracking(
+                                selectedStage!,
+                              );
+
+                              if (success) {
+                                if (context.mounted) {
+                                  setState(() {
+                                    _loadFuture = _loadAllData();
+                                  });
+                                }
+                              }
+                            },
+                          );
+
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isUpdate
+                                      ? "✓ Timeline stage updated"
+                                      : "✓ New timeline stage added",
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                            Navigator.pop(context);
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                          }
+                        } finally {
+                          setModalState(
+                                () => _isUpdatingCaseTracking = false,
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _caseTrackingTile(CaseTrackingStage ct) {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+            presentUsersAdvocateId == widget.advocateId;
+    final index = caseTrackings.indexOf(ct);
+    final canUp = index > 0;
+    final canDown = index < caseTrackings.length - 1;
+    final currentPayment = stagePayments[ct.caseStage];
+    final currentPrice = currentPayment?.price ?? 0;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallMobile = screenWidth < 480;
+    final isVerySmall = screenWidth < 380;
+
+    final titleSize = isVerySmall ? 12 : (isSmallMobile ? 13 : 14);
+    final subtitleSize = isVerySmall ? 10 : (isSmallMobile ? 11 : 12);
+
+    String stageName = _prettyStageName(ct.caseStage);
+    if (isVerySmall && stageName.length > 20) {
+      stageName = _prettyStageName(stageName);
+    } else if (isSmallMobile && stageName.length > 28) {
+      stageName = stageName.substring(0, 25) + '...';
+    }
+
+    return Card(
+      margin: EdgeInsets.symmetric(vertical: isVerySmall ? 4 : 6),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(isVerySmall ? 8 : 10),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          vertical: isVerySmall ? 8 : 10,
+          horizontal: isVerySmall ? 10 : 12,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // আইকন
+            Icon(
+              Icons.timeline,
+              color: Colors.deepPurple,
+              size: isVerySmall ? 16 : 18,
+            ),
+            SizedBox(width: isVerySmall ? 8 : 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    stageName,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: titleSize * 1.0,
+                      height: 1.3,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: true,
+                  ),
+                  SizedBox(height: isVerySmall ? 2 : 4),
+                  Text(
+                    "Stage #${ct.stageNumber}",
+                    style: TextStyle(
+                      fontSize: subtitleSize * 1.0,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            if (!isAdvocate && currentPrice > 0)
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isVerySmall ? 4 : 6,
+                  vertical: isVerySmall ? 2 : 3,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  "৳${currentPrice.toStringAsFixed(0)}",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                    fontSize: subtitleSize - 1,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
