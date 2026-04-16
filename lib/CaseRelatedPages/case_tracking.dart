@@ -3077,11 +3077,19 @@ class _CaseTrackingState extends State<CaseTracking> {
                       color: Colors.grey.shade600,
                     ),
                   ),
+                  if(ct.trackingTime != null)
+                    Text(
+                      "${ct.trackingTime}",
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: subtitleSize * 1.0,
+                      ),
+                    ),
                 ],
               ),
             ),
 
-            if (!isAdvocate && currentPrice > 0)
+            if (currentPrice > 0)
               Container(
                 padding: EdgeInsets.symmetric(
                   horizontal: isVerySmall ? 4 : 6,
