@@ -116,24 +116,10 @@ class _CaseRequestListPageState extends State<CaseRequestListPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(c.caseType.label),
+                              Text('Requested by ${c.userName}'),
                               if (c.requestedAdvocateId != null)
-                                FutureBuilder<String>(
-                                  future: getAdvocateName(
-                                    c.requestedAdvocateId!,
-                                  ),
-                                  builder: (context, snapshot) {
-                                    if (snapshot.connectionState ==
-                                        ConnectionState.waiting) {
-                                      return const Text("Loading advocate...");
-                                    }
-                                    if (!snapshot.hasData ||
-                                        snapshot.hasError) {
-                                      return const SizedBox.shrink();
-                                    }
-                                    return Text(
-                                      "Requested Advocate: ${snapshot.data}",
-                                    );
-                                  },
+                                Text(
+                                  "Requested Advocate: ${c.requestAdvocateName}",
                                 ),
                             ],
                           ),

@@ -87,47 +87,12 @@ class CaseRequestDetailsPage extends StatelessWidget {
             Chip(label: Text(caseRequest.caseType.label)),
             const Divider(),
 
-            Text("Requested By"),
-
-            FutureBuilder<String>(
-              future: getNameFromUser(caseRequest.userId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Text(
-                    "Loading...",
-                    style: TextStyle(color: Colors.red, fontSize: 16),
-                  );
-                }
-
-                if (snapshot.hasError || !snapshot.hasData) {
-                  return const Text(
-                    "N/A",
-                    style: TextStyle(color: Colors.red, fontSize: 16),
-                  );
-                }
-
-                return Text(
-                  snapshot.data!,
-                  style: TextStyle(color: Colors.red, fontSize: 16),
-                );
-              },
-            ),
+            Text("Requested By ${caseRequest.userName}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),),
 
             const Divider(),
 
             if (caseRequest.requestedAdvocateId != null)
-              FutureBuilder<String>(
-                future: getAdvocateName(caseRequest.requestedAdvocateId!),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Text("Loading advocate...");
-                  }
-                  if (!snapshot.hasData || snapshot.hasError) {
-                    return const SizedBox.shrink();
-                  }
-                  return Text("Requested Advocate: ${snapshot.data}");
-                },
-              ),
+              Text("Requested Advocate: ${caseRequest.requestAdvocateName}"),
 
             const Divider(),
 

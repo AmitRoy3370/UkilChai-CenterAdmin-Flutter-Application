@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../QuestionPages/question_response.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +22,7 @@ import 'QuestionModel.dart';
 import 'QuestionService.dart';
 
 class QuestionCard extends StatefulWidget {
-  final QuestionModel question;
+  final QuestionResponse question;
   final VoidCallback refreshMethod;
 
   const QuestionCard({
@@ -37,7 +38,6 @@ class QuestionCard extends StatefulWidget {
 class _QuestionCardState extends State<QuestionCard> {
   String currentUserId = "";
   bool isMyQuestion = false;
-  bool isAdmin = false;
 
   PlatformFile? selectedFile; // Unified for web/mobile
   String? fileName;
@@ -72,21 +72,9 @@ class _QuestionCardState extends State<QuestionCard> {
   Future<void> loadUser() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     currentUserId = prefs.getString("userId") ?? "";
-    final token = prefs.getString('jwt_token') ?? '';
-
-    final centerAdminResponse = await http.get(
-      Uri.parse(
-        "${BASE_URL.Urls().baseURL}center-admin/by-user/$currentUserId",
-      ),
-      headers: {
-        "content-type": "application/json",
-        "Authorization": "Bearer $token",
-      },
-    );
 
     setState(() {
       isMyQuestion = currentUserId == widget.question.userId;
-      isAdmin = centerAdminResponse.statusCode == 200;
     });
   }
 
@@ -230,7 +218,7 @@ class _QuestionCardState extends State<QuestionCard> {
       text: widget.question.message,
     );
 
-    String selectedType = widget.question.questionType;
+    String selectedType = widget.question.questionType.apiValue;
 
     showDialog(
       context: context,
@@ -323,7 +311,7 @@ class _QuestionCardState extends State<QuestionCard> {
                     request.fields["attachmentId"] =
                         widget.question.attachmentId!;
                   } else {
-                    request.fields["attachmentId"] = "";
+                    request.fields["attachmentId"] = "attachmentId";
                   }
 
                   if (selectedFile != null) {
@@ -373,7 +361,9 @@ class _QuestionCardState extends State<QuestionCard> {
                   final response = await http.Response.fromStream(
                     streamedResponse,
                   );
-
+                  print(
+                    'Update question response status :- ${response.statusCode}',
+                  );
                   if (response.statusCode == 200 ||
                       response.statusCode == 201) {
                     if (context.mounted)
@@ -431,83 +421,80 @@ class _QuestionCardState extends State<QuestionCard> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  widget.question.questionType,
+                  widget.question.questionType.apiValue,
                   style: const TextStyle(color: Colors.green),
                 ),
-                if (isAdmin)
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert),
-                    itemBuilder: (context) => [
-                      if (isMyQuestion)
-                        const PopupMenuItem(value: "edit", child: Text("Edit")),
-                      const PopupMenuItem(
-                        value: "delete",
-                        child: Text("Delete"),
-                      ),
-                    ],
-                    onSelected: (value) async {
-                      if (value == "edit") {
-                        showEditDialog();
-                      }
 
-                      if (value == "delete") {
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (BuildContext context) {
-                            return AlertDialog(
-                              title: Text("Deleting question...."),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CircularProgressIndicator(),
-                                  const SizedBox(height: 10),
-                                  Text("In process...."),
-                                ],
-                              ),
-                            );
-                          },
-                        );
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  itemBuilder: (context) => [
+                    if (isMyQuestion)
+                      const PopupMenuItem(value: "edit", child: Text("Edit")),
+                    const PopupMenuItem(value: "delete", child: Text("Delete")),
+                  ],
+                  onSelected: (value) async {
+                    if (value == "edit" && isMyQuestion) {
+                      showEditDialog();
+                    }
 
-                        final res = await QuestionService.deleteQuestion(
-                          questionId: widget.question.id!,
-                          userId: currentUserId,
-                        );
-                        if (res) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Question deleted successfully"),
+                    if (value == "delete") {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (BuildContext context) {
+                          return AlertDialog(
+                            title: Text("Deleting question...."),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircularProgressIndicator(),
+                                const SizedBox(height: 10),
+                                Text("In process...."),
+                              ],
                             ),
                           );
+                        },
+                      );
 
-                          setState(() {
-                            isMyQuestion = false;
-                          });
+                      final res = await QuestionService.deleteQuestion(
+                        questionId: widget.question.id!,
+                        userId: currentUserId,
+                      );
+                      if (res) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Question deleted successfully"),
+                          ),
+                        );
 
-                          widget.refreshMethod.call();
+                        setState(() {
+                          isMyQuestion = false;
+                        });
 
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                          }
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Failed to delete question"),
-                            ),
-                          );
+                        widget.refreshMethod.call();
 
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                          }
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("Failed to delete question"),
+                          ),
+                        );
+
+                        if (context.mounted) {
+                          Navigator.pop(context);
                         }
                       }
-                    },
-                  ),
+                    }
+                  },
+                ),
               ],
             ),
 
             const SizedBox(height: 6),
-            FutureBuilder<String>(
+            /*FutureBuilder<String>(
               future: getNameFromUser(widget.question.userId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -519,6 +506,10 @@ class _QuestionCardState extends State<QuestionCard> {
                   style: const TextStyle(color: Colors.black),
                 );
               },
+            ),*/
+            Text(
+              widget.question.userName,
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
             ),
             const SizedBox(height: 6),
             Text(
@@ -545,7 +536,17 @@ class _QuestionCardState extends State<QuestionCard> {
             const Divider(color: Colors.grey),
 
             /// ================= ANSWERS =================
-            FutureBuilder<List<AnswerModel>>(
+            if (widget.question.answers.isEmpty) Text('No Answer yet'),
+            if (widget.question.answers.isNotEmpty) Text('Answers'),
+
+            if (widget.question.answers.isNotEmpty)
+              Column(
+                children: widget.question.answers
+                    .map((a) => AnswerTile(answer: a, onRefresh: widget.refreshMethod))
+                    .toList(),
+              ),
+
+            /*FutureBuilder<List<AnswerModel>>(
               future: AnswerService.getByQuestion(widget.question.id!),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
@@ -567,7 +568,7 @@ class _QuestionCardState extends State<QuestionCard> {
                   children: answers.map((a) => AnswerTile(answer: a)).toList(),
                 );
               },
-            ),
+            ),*/
           ],
         ),
       ),

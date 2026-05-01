@@ -12,10 +12,12 @@ import '../Auth/AuthService.dart';
 import '../Utils/BaseURL.dart' as baseURL;
 import 'AnswerModel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../QuestionPages/answer_response.dart';
 
 class AnswerTile extends StatelessWidget {
-  final AnswerModel answer;
-  const AnswerTile({required this.answer, super.key});
+  final AnswerResponse answer;
+  final VoidCallback? onRefresh;
+  const AnswerTile({required this.answer, super.key, this.onRefresh});
 
   // ---------------- GET USER NAME ----------------
   Future<String> getNameFromUser(String userId) async {
@@ -96,8 +98,9 @@ class AnswerTile extends StatelessWidget {
       );
 
       if (response.statusCode != 200) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text("Download failed")));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Download failed")));
         return;
       }
 
@@ -112,7 +115,8 @@ class AnswerTile extends StatelessWidget {
       }
 
       // 🔹 Get content type
-      final contentType = response.headers['content-type'] ?? "application/octet-stream";
+      final contentType =
+          response.headers['content-type'] ?? "application/octet-stream";
 
       // 🔹 Add extension if missing
       if (!fileName.contains(".")) {
@@ -144,13 +148,12 @@ class AnswerTile extends StatelessWidget {
       await file.writeAsBytes(response.bodyBytes);
 
       await OpenFilex.open(filePath);
-
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Attachment error: $e")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Attachment error: $e")));
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -164,25 +167,87 @@ class AnswerTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          FutureBuilder<String>(
-            future: getNameFromAdvocate(answer.advocateId),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Text("Advocate: loading...");
-              }
-              if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Text("Advocate: N/A");
-              } else {
-                return Text("Advocate: ${snapshot.data}", style : TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.bold));
-              }
-            }
-          ),
-
           Text(
-            answer.message,
-            style: const TextStyle(color: Colors.black, fontSize: 13),
+            "Advocate: ${answer.advocateName}",
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
           ),
+
+          const SizedBox(height: 6),
+
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  answer.message,
+                  style: const TextStyle(color: Colors.black, fontSize: 13),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: Text('Delete Answer'),
+                          content: Column(
+                            children: [
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 10),
+                              Text('In progress....'),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+
+                    SharedPreferences prefs =
+                        await SharedPreferences.getInstance();
+                    final token = prefs.getString('jwt_token') ?? '';
+                    final userId = prefs.getString('userId') ?? '';
+
+                    final deleteResponse = await http.delete(
+                      Uri.parse(
+                        "${baseURL.Urls().baseURL}answers/delete/${answer.id}?userId=$userId",
+                      ),
+                      headers: {
+                        "content-type": "application/json",
+                        "Authorization": "Bearer $token",
+                      },
+                    );
+
+                    if (deleteResponse.statusCode == 200 ||
+                        deleteResponse.statusCode == 201) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Answer deleted successfully"),
+                        ),
+                      );
+
+                      onRefresh?.call();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Answer not deleted")),
+                      );
+                    }
+
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: Icon(Icons.delete),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
           if (answer.attachmentId != null)
             InkWell(
               onTap: () => openAttachment(context, answer.attachmentId!),

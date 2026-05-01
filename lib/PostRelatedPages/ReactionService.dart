@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import '../PostRelatedPages/post_reaction_response.dart';
 import 'package:http/http.dart' as http;
 import '../Utils/BaseURL.dart' as BASE_URL;
 import 'PostReaction.dart';
@@ -10,7 +11,7 @@ class ReactionService {
       "${BASE_URL.Urls().baseURL}post-reactions";
 
   /// ---------- FETCH REACTIONS BY POST ----------
-  static Future<List<PostReaction>> fetchByPost(
+  static Future<List<PostReactionResponse>> fetchByPost(
       String postId, String token) async {
 
     final res = await http.get(
@@ -23,7 +24,7 @@ class ReactionService {
 
     if (res.statusCode == 200) {
       final List data = jsonDecode(res.body);
-      return data.map((e) => PostReaction.fromJson(e)).toList();
+      return data.map((e) => PostReactionResponse.fromJson(e)).toList();
     }
 
     return [];
@@ -38,21 +39,34 @@ class ReactionService {
       String? comment,
       ) async {
 
+    // ✅ Build request body - শুধু non-null fields পাঠান
+    final Map<String, dynamic> requestBody = {
+      "advocatePostId": postId,
+      "userId": userId,
+    };
+
+    if (reaction != null && reaction.isNotEmpty) {
+      requestBody["postReaction"] = reaction;
+    }
+
+    if (comment != null && comment.isNotEmpty) {
+      requestBody["comment"] = comment;
+    }
+
+    print("Request Body: $requestBody");
+
     final res = await http.post(
       Uri.parse("$_base/add"),
       headers: {
         "Authorization": "Bearer $token",
         "Content-Type": "application/json",
       },
-      body: jsonEncode({
-        "advocatePostId": postId,
-        "userId": userId,
-        "postReaction": reaction,
-        "comment": comment,
-      }),
+      body: jsonEncode(requestBody),
     );
 
-    if (res.statusCode == 200) {
+    print("reaction add body :- ${res.body} and status :- ${res.statusCode}");
+
+    if (res.statusCode == 201 || res.statusCode == 200) {
       return PostReaction.fromJson(jsonDecode(res.body));
     }
 
@@ -71,21 +85,33 @@ class ReactionService {
       String? comment,
       ) async {
 
+    // ✅ Build request body - শুধু non-null fields পাঠান
+    final Map<String, dynamic> requestBody = {
+      "advocatePostId": postId,
+      "userId": userId,
+    };
+
+    if (reaction != null && reaction.isNotEmpty) {
+      requestBody["postReaction"] = reaction;
+    }
+
+    if (comment != null && comment.isNotEmpty) {
+      requestBody["comment"] = comment;
+    }
+
+    print("Request Body: $requestBody");
+
+
     final res = await http.put(
       Uri.parse("$_base/update/$reactionId"),
       headers: {
         "Authorization": "Bearer $token",
         "Content-Type": "application/json",
       },
-      body: jsonEncode({
-        "userId": userId,
-        "postReaction": reaction,
-        "comment": comment,
-        "advocatePostId":postId
-      }),
+      body: jsonEncode(requestBody),
     );
 
-    if (res.statusCode == 200) {
+    if (res.statusCode == 201 || res.statusCode == 200) {
       return PostReaction.fromJson(jsonDecode(res.body));
     }
 
@@ -110,7 +136,7 @@ class ReactionService {
   }
 
   /// ---------- FETCH REACTIONS BY USER ----------
-  static Future<List<PostReaction>> fetchByUser(
+  static Future<List<PostReactionResponse>> fetchByUser(
       String userId, String token) async {
 
     final res = await http.get(
@@ -122,10 +148,27 @@ class ReactionService {
 
     if (res.statusCode == 200) {
       final List data = jsonDecode(res.body);
-      return data.map((e) => PostReaction.fromJson(e)).toList();
+      return data.map((e) => PostReactionResponse.fromJson(e)).toList();
     }
 
     return [];
+  }
+
+  static Future<PostReactionResponse> getById(String id) async {
+
+    final res = await http.get(
+      Uri.parse("$_base/$id"),
+      headers: {
+        "Content-Type": "application/json",
+      },
+    );
+
+    if (res.statusCode == 200) {
+      return PostReactionResponse.fromJson(jsonDecode(res.body));
+    }
+
+    throw Exception(res.body);
+
   }
 
 }

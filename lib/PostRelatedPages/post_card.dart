@@ -1,18 +1,23 @@
 import 'dart:convert';
 
+import '../PostRelatedPages/post_response.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../Utils/AdvocateSpeciality.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
 import './AdvocatePost.dart';
 import 'PostAttachmentViewer.dart';
 import 'reaction_bar.dart';
 
-class PostCard extends StatelessWidget {
-  final AdvocatePost post;
-  final VoidCallback onDelete;
+class PostCard extends StatefulWidget {
+  final PostResponse post;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final Function? onReactionChanged;
+  final bool? canReact;
 
-  const PostCard({super.key, required this.post, required this.onDelete});
+  const PostCard({super.key, required this.post, this.onEdit, this.onDelete, this.onReactionChanged, this.canReact});
 
   // ---------------- GET USER NAME ----------------
   Future<String> getNameFromUser(String userId) async {
@@ -34,50 +39,6 @@ class PostCard extends StatelessWidget {
       return body["name"] ?? "";
     }
     return "";
-  }
-
-  Future<bool> isMyAdvocate(String? advocateId) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token') ?? '';
-    final userId = prefs.getString('userId') ?? '';
-
-    final centerAdminResponse = await http.get(
-      Uri.parse("${BASE_URL.Urls().baseURL}center-admin/by-user/$userId"),
-      headers: {"Authorization": "Bearer $token"},
-    );
-
-    if (centerAdminResponse.statusCode == 200) {
-      final centerAdminBody = jsonDecode(centerAdminResponse.body);
-      final advocateIds = centerAdminBody["advocates"] as List<dynamic>;
-
-      return advocateIds.contains(advocateId);
-    } else {
-      return false;
-    }
-  }
-
-  Future<void> deletePost(BuildContext context) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('jwt_token') ?? '';
-    final userId = prefs.getString('userId') ?? '';
-
-    final response = await http.delete(
-      Uri.parse(
-        "${BASE_URL.Urls().baseURL}advocate/posts/delete/${post.id}/$userId",
-      ),
-      headers: {"Authorization": "Bearer $token"},
-    );
-
-    if (response.statusCode == 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Post deleted successfully")),
-      );
-      onDelete();
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Failed to delete post")));
-    }
   }
 
   // ---------------- GET ADVOCATE NAME ----------------
@@ -110,6 +71,17 @@ class PostCard extends StatelessWidget {
     return "";
   }
 
+
+
+  @override
+  State<StatefulWidget> createState() {
+
+    return _Post_Card_State();
+
+  }
+}
+
+class _Post_Card_State extends State<PostCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -119,137 +91,96 @@ class PostCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// HEADER ROW (NAME + THREE DOT)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                /// Advocate Name
                 Expanded(
-                  child: FutureBuilder<String>(
-                    future: getNameFromAdvocate(post.advocateId),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Text("Loading...");
-                      }
-                      if (!snapshot.hasData || snapshot.hasError) {
-                        return const SizedBox.shrink();
-                      }
-                      return Text(
-                        snapshot.data!,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      );
-                    },
+                  child: Text(
+                    widget.post.advocateName,
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ),
+                Row(
+                  children: [
 
-                /// THREE DOT MENU
-                FutureBuilder<bool>(
-                  future: isMyAdvocate(post.advocateId),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData || snapshot.data == false) {
-                      return const SizedBox.shrink();
-                    }
-
-                    return PopupMenuButton<String>(
-                      onSelected: (value) async {
-                        if (value == "delete") {
-                          final confirm = await showDialog(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text("Delete Post"),
-                              content: const Text(
-                                "Are you sure you want to delete this post?",
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text("Cancel"),
-                                ),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
-                                  ),
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text("Delete"),
-                                ),
-                              ],
-                            ),
-                          );
-
-                          if (confirm == true) {
-                            await deletePost(context);
-                          }
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: "delete",
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text("Delete Post"),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                    if (widget.onDelete != null)
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: widget.onDelete,
+                      ),
+                  ],
                 ),
               ],
             ),
 
-            const SizedBox(height: 8),
-
-            /// POST TYPE
+            const SizedBox(height: 6),
             Text(
-              post.postType,
+              widget.post.postType.apiValue,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-
             const SizedBox(height: 6),
-
-            /// POST CONTENT
-            Text(post.postContent),
-
+            Text(widget.post.postContent),
             const Divider(),
-
-            /// ATTACHMENT BUTTON
-            if (post.attachmentId != null && post.attachmentId!.isNotEmpty)
+            if (widget.post.attachmentId != null)
               ElevatedButton(
                 onPressed: () async {
                   SharedPreferences prefs =
-                      await SharedPreferences.getInstance();
+                  await SharedPreferences.getInstance();
                   final token = prefs.getString('jwt_token') ?? '';
 
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => PostAttachmentView(
-                        attachmentId: post.attachmentId!,
+                        attachmentId: widget.post.attachmentId!,
                         jwtToken: token,
                       ),
                     ),
                   );
                 },
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.attachment),
-                    SizedBox(width: 8),
+                    const Icon(Icons.attachment),
+                    const SizedBox(width: 8),
                     Text("View Attachment"),
                   ],
                 ),
               ),
+            ReactionBar(
+              postResponse: widget.post,
+              onReactionChanged: (reaction, action) {
+                setState(() {
+                  switch (action) {
+                    case 'add':
+                      widget.post.reactions.insert(0, reaction);
+                      break;
+                    case 'remove':
+                      widget.post.reactions.removeWhere((r) => r.id == reaction.id);
+                      break;
+                    case 'update':
+                      final index = widget.post.reactions.indexWhere((r) => r.id == reaction.id);
+                      if (index != -1) {
+                        widget.post.reactions[index] = reaction;
+                      }
+                      break;
+                    case 'replace':
+                      final index = widget.post.reactions.indexWhere((r) => r.id == reaction.id);
+                      if (index != -1) {
+                        widget.post.reactions[index] = reaction;
+                      }
+                      break;
+                  }
+                });
 
-            /// REACTION BAR
-            ReactionBar(postId: post.id),
+                // ✅ Parent (PostFeedPage) কে notify করুন (চাইলে)
+                widget.onReactionChanged?.call(reaction, action);
+              },
+              canReact: widget.canReact ?? true,
+            ),
           ],
         ),
       ),
     );
   }
+
 }

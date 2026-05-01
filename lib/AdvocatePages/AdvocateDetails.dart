@@ -22,6 +22,7 @@ import '../ChatRelatedPages/chat_screen.dart';
 import '../PostRelatedPages/AdvocatePost.dart';
 import '../PostRelatedPages/PostService.dart';
 import '../PostRelatedPages/post_card.dart';
+import '../PostRelatedPages/post_response.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
 
 class AdvocateDetails extends StatefulWidget {
@@ -36,7 +37,7 @@ class AdvocateDetails extends StatefulWidget {
 class AdvocateDetailsState extends State<AdvocateDetails> {
   int totalCases = 0;
   bool loading = true;
-  List<AdvocatePost> posts = [];
+  List<PostResponse> posts = [];
 
   double averageRating = 0.0;
   int totalRatings = 0;
@@ -140,6 +141,7 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
     );
     setState(() {
       posts = data;
+      posts = posts.reversed.toList();
       loading = false;
     });
   }
@@ -395,7 +397,7 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
                       width: 300,
                       child: Card(
                         child: SingleChildScrollView(
-                          child: PostCard(post: posts[index], onDelete: () {}),
+                          child: PostCard(post: posts[index], canReact: false,),
                         ),
                       ),
                     );

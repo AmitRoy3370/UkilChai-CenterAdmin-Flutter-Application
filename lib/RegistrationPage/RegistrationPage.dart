@@ -717,7 +717,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                               TextField(
                                 controller: nameController,
                                 decoration: const InputDecoration(
-                                  labelText: "Name",
+                                  labelText: "User Name",
                                 ),
                               ),
                               TextField(

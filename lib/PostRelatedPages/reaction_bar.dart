@@ -1,4 +1,7 @@
 import 'dart:convert';
+import '../PostRelatedPages/post_reaction.dart';
+import '../PostRelatedPages/post_reaction_response.dart';
+import '../PostRelatedPages/post_response.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,8 +10,18 @@ import './ReactionService.dart';
 import './PostReaction.dart';
 
 class ReactionBar extends StatefulWidget {
-  final String postId;
-  const ReactionBar({super.key, required this.postId});
+  final PostResponse postResponse;
+  final Function(PostReactionResponse reaction, String action)?
+  onReactionChanged; // ✅ নতুন callback
+
+  final bool? canReact;
+
+  const ReactionBar({
+    super.key,
+    required this.postResponse,
+    this.onReactionChanged,
+    this.canReact,
+  });
   @override
   State<ReactionBar> createState() => _ReactionBarState();
 }
@@ -17,9 +30,9 @@ class _ReactionBarState extends State<ReactionBar> {
   final TextEditingController _commentController = TextEditingController();
   String? selectedReaction;
   bool submitting = false;
-  List<PostReaction> reactions = [];
+  List<PostReactionResponse> reactions = [];
   Map<String, String> userNames = {}; // cache userId -> name
-  String? myUserId;
+  String? myUserId, myName;
 
   // Map reaction strings to icons
   final Map<String, IconData> reactionIcons = {
@@ -52,25 +65,12 @@ class _ReactionBarState extends State<ReactionBar> {
     final token = prefs.getString('jwt_token') ?? '';
     myUserId ??= prefs.getString('userId');
 
-    final fetched = await ReactionService.fetchByPost(widget.postId, token);
+    myName = await getNameFromUser(myUserId!);
 
-    // collect user names
-    List<String> newUserIds = [];
-    for (var r in fetched) {
-      if (r.userId != null &&
-          !userNames.containsKey(r.userId) &&
-          !newUserIds.contains(r.userId!)) {
-        newUserIds.add(r.userId!);
-      }
-    }
-
-    final names = await Future.wait(newUserIds.map(getNameFromUser));
+    final fetched = widget.postResponse.reactions;
 
     setState(() {
       reactions = fetched;
-      for (int i = 0; i < newUserIds.length; i++) {
-        userNames[newUserIds[i]] = names[i];
-      }
     });
   }
 
@@ -97,8 +97,9 @@ class _ReactionBarState extends State<ReactionBar> {
   Widget build(BuildContext context) {
     // Group reactions by type and count for summary (only those with reaction)
     Map<String, int> reactionCounts = {};
-    for (var r in reactions.where((r) => r.reaction != null)) {
-      reactionCounts[r.reaction!] = (reactionCounts[r.reaction!] ?? 0) + 1;
+    for (var r in reactions.where((r) => r.postReaction?.value != null)) {
+      reactionCounts[r.postReaction!.value] =
+          (reactionCounts[r.postReaction?.value] ?? 0) + 1;
     }
 
     return SingleChildScrollView(
@@ -138,53 +139,64 @@ class _ReactionBarState extends State<ReactionBar> {
                   ),
                   const SizedBox(height: 4),
                   SizedBox(
-                    height: 300, // Fixed height for the list to prevent overflow
+                    height:
+                    300, // Fixed height for the list to prevent overflow
                     child: ListView.builder(
                       itemCount: reactions.length,
                       itemBuilder: (context, index) {
                         var r = reactions[index];
-                        final userName = r.userId != null
-                            ? userNames[r.userId!] ?? "User"
-                            : "?";
-                        final reactionIcon = r.reaction != null
+                        final userName = r.userName;
+                        final isOwn = r.userId == myUserId;
+
+                        // ✅ Safe null check for reaction
+                        final hasReaction = r.postReaction != null;
+                        final reactionValue = hasReaction ? r.postReaction!.value : '';
+
+                        final reactionIcon = hasReaction && reactionValue.isNotEmpty
                             ? Icon(
-                          reactionIcons[r.reaction] ?? Icons.help_outline,
+                          reactionIcons[reactionValue] ?? Icons.help_outline,
                           size: 16,
                         )
                             : null;
-                        final isOwn = r.userId == myUserId;
+
+                        // ✅ Safe check for content
+                        final hasContent = hasReaction || (r.comment != null && r.comment!.isNotEmpty);
+
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: CircleAvatar(
                             child: Text(
-                              userName.isNotEmpty ? userName[0].toUpperCase() : "?",
+                              userName.isNotEmpty
+                                  ? userName[0].toUpperCase()
+                                  : "?",
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),
                           title: Text(userName),
-                          subtitle: (r.reaction != null || r.comment != null)
+                          subtitle:
+                          hasContent
                               ? Row(
                             children: [
                               if (reactionIcon != null) ...[
                                 reactionIcon,
                                 const SizedBox(width: 4),
                               ],
-                              if (r.comment != null)
+                              if (r.comment != null && r.comment!.isNotEmpty)
                                 Expanded(child: Text(r.comment!)),
                             ],
                           )
                               : null,
-                          trailing: isOwn
-                              ? PopupMenuButton<String>(
+                          trailing: PopupMenuButton<String>(
                             icon: const Icon(Icons.more_vert),
                             onSelected: (value) {
-                              if (value == 'Update') {
+                              if (value == 'Update' && isOwn && widget.canReact != null && widget.canReact == true) {
                                 _editReaction(r);
                               } else if (value == 'Delete') {
-                                _deleteReaction(r.id!);
+                                _deleteReaction(r.id!, r);
                               }
                             },
                             itemBuilder: (context) => [
+                              if(isOwn && widget.canReact != null && widget.canReact == true)
                               const PopupMenuItem(
                                 value: 'Update',
                                 child: Text('Update'),
@@ -194,8 +206,8 @@ class _ReactionBarState extends State<ReactionBar> {
                                 child: Text('Delete'),
                               ),
                             ],
-                          )
-                              : null,
+                          ),
+
                         );
                       },
                     ),
@@ -204,44 +216,73 @@ class _ReactionBarState extends State<ReactionBar> {
               ),
             ),
 
+          if(widget.canReact != null && widget.canReact == true)
           /// ---------- REACTIONS SELECTION FOR NEW ----------
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: reactionIcons.keys
-                  .map((reaction) => _reactionBtn(reaction))
-                  .toList(),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: reactionIcons.keys
+                    .map((reaction) => _reactionBtn(reaction))
+                    .toList(),
+              ),
             ),
-          ),
           const SizedBox(height: 8),
 
+          if(widget.canReact != null && widget.canReact == true)
           /// ---------- COMMENT BOX FOR NEW ----------
-          TextField(
-            controller: _commentController,
-            minLines: 1,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: "Write a comment (optional)",
-              border: OutlineInputBorder(),
+            TextField(
+              controller: _commentController,
+              minLines: 1,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: "Write a comment (optional)",
+                border: OutlineInputBorder(),
+              ),
             ),
-          ),
           const SizedBox(height: 8),
 
+          if(widget.canReact != null && widget.canReact == true)
           /// ---------- SUBMIT BUTTON FOR NEW ----------
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              icon: submitting
-                  ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-                  : const Icon(Icons.send),
-              label: const Text("Submit"),
-              onPressed: submitting ? null : _submitNew,
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: submitting
+                    ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Icon(Icons.send),
+                label: const Text("Submit"),
+                onPressed: submitting
+                    ? null
+                    : () async {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text("Submitting reaction...."),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 10),
+                            Text('In progress....'),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+
+                  await _submitNew();
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -266,6 +307,8 @@ class _ReactionBarState extends State<ReactionBar> {
     );
   }
 
+  PostReactionResponse? reactionResponse;
+
   /// ---------- SUBMIT NEW REACTION + COMMENT ----------
   Future<void> _submitNew() async {
     final comment = _commentController.text.trim();
@@ -278,13 +321,47 @@ class _ReactionBarState extends State<ReactionBar> {
     final token = prefs.getString('jwt_token') ?? '';
     final userId = prefs.getString('userId') ?? '';
     try {
-      await ReactionService.addReaction(
-        widget.postId,
+      PostReaction? reaction = await ReactionService.addReaction(
+        widget.postResponse.id,
         userId,
         selectedReaction,
         token,
-        comment.isEmpty ? null : comment,
+        (comment.isEmpty) ? null : comment,
       );
+
+      try {
+        if (reaction != null) {
+
+          reactionResponse = PostReactionResponse(
+            id: reaction.id,
+            postReaction: reaction.reaction != null ? PostReactions.fromString(reaction.reaction!) : null,
+            comment: reaction.comment,
+            userId: reaction.userId,
+            userName: myName!,
+            advocatePostId: reaction.advocatePostId,
+          );
+
+          if(reactionResponse != null) {
+            widget.onReactionChanged?.call(
+
+                reactionResponse!,
+                "add"
+
+            );
+          }
+
+        }
+      } catch (e) {
+        print("error in adding reaction :- $e");
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+          ),
+        );
+
+      }
+
       _commentController.clear();
       selectedReaction = null;
       _showMsg("Submitted successfully");
@@ -297,8 +374,8 @@ class _ReactionBarState extends State<ReactionBar> {
   }
 
   /// ---------- EDIT REACTION ----------
-  Future<void> _editReaction(PostReaction r) async {
-    String? editReaction = r.reaction;
+  Future<void> _editReaction(PostReactionResponse r) async {
+    String? editReaction = r.postReaction!.value;
     final editCommentController = TextEditingController(text: r.comment ?? '');
 
     final result = await showDialog<bool>(
@@ -320,7 +397,9 @@ class _ReactionBarState extends State<ReactionBar> {
                         return Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           child: FilterChip(
-                            label: Icon(reactionIcons[reaction] ?? Icons.help_outline),
+                            label: Icon(
+                              reactionIcons[reaction] ?? Icons.help_outline,
+                            ),
                             selected: isSelected,
                             onSelected: (_) {
                               setDialogState(() {
@@ -375,15 +454,52 @@ class _ReactionBarState extends State<ReactionBar> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('jwt_token') ?? '';
       try {
-        await ReactionService.updateReaction(
-          r.id!,
-          widget.postId,
+        PostReaction? postReaction = await ReactionService.updateReaction(
+          r.id,
+          widget.postResponse.id,
           myUserId!,
           editReaction,
           token,
           comment.isEmpty ? null : comment,
         );
-        _showMsg("Updated successfully");
+
+        try {
+          if (postReaction != null) {
+
+
+            r.copyWith(
+              postReaction: PostReactions.fromString(postReaction.reaction!),
+              comment: postReaction.comment,
+              userId: postReaction.userId,
+              userName: myName!,
+              advocatePostId: postReaction.advocatePostId,
+            );
+
+            if(mounted) {
+              widget.onReactionChanged?.call(
+
+                  r,
+                  "update"
+
+              ).call();
+            }
+
+          }
+        } catch (e) {
+          print("error in updating reaction :- ${e.toString()}");
+
+
+
+        }
+
+        if(postReaction != null) {
+          _showMsg("Updated successfully");
+        } else {
+
+          _showMsg("Update failed");
+
+        }
+
         await _loadReactions();
       } catch (e) {
         _showMsg("Update failed");
@@ -396,7 +512,7 @@ class _ReactionBarState extends State<ReactionBar> {
   }
 
   /// ---------- DELETE REACTION ----------
-  Future<void> _deleteReaction(String reactionId) async {
+  Future<void> _deleteReaction(String reactionId, PostReactionResponse postReactionResponse) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -421,8 +537,24 @@ class _ReactionBarState extends State<ReactionBar> {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token') ?? '';
     try {
-      await ReactionService.deleteReaction(reactionId, myUserId!, token);
-      _showMsg("Deleted successfully");
+      bool deleted = await ReactionService.deleteReaction(
+        reactionId,
+        myUserId!,
+        token,
+      );
+
+      if (deleted) {
+        _showMsg("Deleted successfully");
+
+        widget.onReactionChanged?.call(
+            postReactionResponse,
+            "remove"
+        );
+
+      } else {
+        _showMsg("Delete failed");
+      }
+
       await _loadReactions();
     } catch (e) {
       _showMsg("Delete failed");

@@ -22,6 +22,7 @@ import '../ChatRelatedPages/chat_screen.dart';
 import '../PostRelatedPages/AdvocatePost.dart';
 import '../PostRelatedPages/PostService.dart';
 import '../PostRelatedPages/post_card.dart';
+import '../PostRelatedPages/post_response.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
 import 'advocate_join_request.dart';
 
@@ -42,7 +43,7 @@ class AdvocateJoinRequestDetailsState
     extends State<AdvocateJoinRequestDetails> {
   int totalCases = 0;
   bool loading = true;
-  List<AdvocatePost> posts = [];
+  List<PostResponse> posts = [];
 
   double averageRating = 0.0;
   int totalRatings = 0;
@@ -146,6 +147,7 @@ class AdvocateJoinRequestDetailsState
     );
     setState(() {
       posts = data;
+      posts = posts.reversed.toList();
       loading = false;
     });
   }
