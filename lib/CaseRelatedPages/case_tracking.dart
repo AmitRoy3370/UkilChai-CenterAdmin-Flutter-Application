@@ -32,6 +32,11 @@ import 'appeal_hearing_service.dart';
 import 'case_tracking_model.dart';
 import 'document_draft.dart';
 import 'hearing_service.dart';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CaseTracking extends StatefulWidget {
   final String? caseId;
@@ -61,7 +66,8 @@ class CaseTracking extends StatefulWidget {
   State<CaseTracking> createState() => _CaseTrackingState();
 }
 
-class _CaseTrackingState extends State<CaseTracking> {
+class _CaseTrackingState extends State<CaseTracking>
+    with SingleTickerProviderStateMixin {
   late Future<void> _loadFuture;
   DocumentDraft? documentDrafts;
   CaseJudgment? caseJudgment;
@@ -80,7 +86,7 @@ class _CaseTrackingState extends State<CaseTracking> {
   List<PlatformFile> _selectedDocumentsDraftsNewFiles = [];
   List<String> _documentDraftsExistingAttachments = []; // for update mode
   Set<String> _documentDraftsAttachmentsToDelete =
-  {}; // user wants to remove these
+      {}; // user wants to remove these
 
   // ====================== HEARING STATES ======================
   bool _isUploadingHearing = false;
@@ -111,10 +117,30 @@ class _CaseTrackingState extends State<CaseTracking> {
   Map<String, double> stagePrices = {}; // ← CHANGE TO
   Map<String, PaymentDetails> stagePayments = {}; // ← NEW
 
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
+
   @override
   void initState() {
     super.initState();
+
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeInOut,
+    );
+    _fadeController.forward();
+
     _loadFuture = _loadAllData();
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
   }
 
   Future<bool> isMyCase() async {
@@ -368,7 +394,7 @@ class _CaseTrackingState extends State<CaseTracking> {
   Future<bool> _addCaseTracking(String caseStage) async {
     final userId =
         widget.advocateUserId ??
-            (await SharedPreferences.getInstance()).getString('userId');
+        (await SharedPreferences.getInstance()).getString('userId');
     final response = await http.post(
       Uri.parse("${BASE_URL.Urls().baseURL}caseTracking/add/$userId"),
       headers: {
@@ -383,7 +409,7 @@ class _CaseTrackingState extends State<CaseTracking> {
   Future<bool> _updateCaseTracking(String id, String caseStage) async {
     final userId =
         widget.advocateUserId ??
-            (await SharedPreferences.getInstance()).getString('userId');
+        (await SharedPreferences.getInstance()).getString('userId');
     final response = await http.put(
       Uri.parse("${BASE_URL.Urls().baseURL}caseTracking/update/$id/$userId"),
       headers: {
@@ -398,7 +424,7 @@ class _CaseTrackingState extends State<CaseTracking> {
   Future<bool> _deleteCaseTracking(String id) async {
     final userId =
         widget.advocateUserId ??
-            (await SharedPreferences.getInstance()).getString('userId');
+        (await SharedPreferences.getInstance()).getString('userId');
     final response = await http.delete(
       Uri.parse("${BASE_URL.Urls().baseURL}caseTracking/delete/$id/$userId"),
       headers: {'Authorization': 'Bearer ${widget.token!}'},
@@ -611,12 +637,12 @@ class _CaseTrackingState extends State<CaseTracking> {
                             children: [
                               // Existing files (only in update mode)
                               ..._documentDraftsExistingAttachments.map((
-                                  attId,
-                                  ) {
+                                attId,
+                              ) {
                                 final willDelete =
-                                _documentDraftsAttachmentsToDelete.contains(
-                                  attId,
-                                );
+                                    _documentDraftsAttachmentsToDelete.contains(
+                                      attId,
+                                    );
                                 return ListTile(
                                   leading: Icon(
                                     willDelete
@@ -663,28 +689,28 @@ class _CaseTrackingState extends State<CaseTracking> {
                                   .asMap()
                                   .entries
                                   .map((entry) {
-                                int idx = entry.key;
-                                PlatformFile file = entry.value;
-                                return ListTile(
-                                  leading: const Icon(
-                                    Icons.add_circle,
-                                    color: Colors.green,
-                                  ),
-                                  title: Text(file.name),
-                                  trailing: IconButton(
-                                    icon: const Icon(
-                                      Icons.remove_circle,
-                                      color: Colors.red,
-                                    ),
-                                    onPressed: () {
-                                      setModalState(() {
-                                        _selectedDocumentsDraftsNewFiles
-                                            .removeAt(idx);
-                                      });
-                                    },
-                                  ),
-                                );
-                              }),
+                                    int idx = entry.key;
+                                    PlatformFile file = entry.value;
+                                    return ListTile(
+                                      leading: const Icon(
+                                        Icons.add_circle,
+                                        color: Colors.green,
+                                      ),
+                                      title: Text(file.name),
+                                      trailing: IconButton(
+                                        icon: const Icon(
+                                          Icons.remove_circle,
+                                          color: Colors.red,
+                                        ),
+                                        onPressed: () {
+                                          setModalState(() {
+                                            _selectedDocumentsDraftsNewFiles
+                                                .removeAt(idx);
+                                          });
+                                        },
+                                      ),
+                                    );
+                                  }),
                             ],
                           ),
                         ),
@@ -711,12 +737,12 @@ class _CaseTrackingState extends State<CaseTracking> {
                             ElevatedButton.icon(
                               icon: _isUploadingDraft
                                   ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
                                   : const Icon(Icons.save),
                               label: Text(
                                 _isUploadingDraft
@@ -729,93 +755,93 @@ class _CaseTrackingState extends State<CaseTracking> {
                               onPressed: _isUploadingDraft
                                   ? null
                                   : () async {
-                                setModalState(
-                                      () => _isUploadingDraft = true,
-                                );
-
-                                // Disable the button by showing loading state
-                                try {
-                                  bool success;
-
-                                  if (isUpdate) {
-                                    success = await draftService.updateDraft(
-                                      draftId: documentDrafts!.id,
-                                      advocateId:
-                                      documentDrafts!.advocateId,
-                                      caseId: documentDrafts!.caseId,
-                                      userId: widget.advocateUserId!,
-                                      existingFiles:
-                                      _documentDraftsExistingAttachments,
-                                      newFiles:
-                                      _selectedDocumentsDraftsNewFiles,
-                                    );
-                                  } else {
-                                    success = await draftService.addDraft(
-                                      advocateId: widget.advocateId ?? "",
-                                      caseId: widget.caseId!,
-                                      userId: widget.advocateUserId!,
-                                      files:
-                                      _selectedDocumentsDraftsNewFiles,
-                                    );
-                                  }
-
-                                  if (success) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            isUpdate
-                                                ? "✓ Document draft updated successfully"
-                                                : "✓ Document draft created successfully",
-                                          ),
-                                          backgroundColor: Colors.green,
-                                          duration: const Duration(
-                                            seconds: 2,
-                                          ),
-                                        ),
+                                      setModalState(
+                                        () => _isUploadingDraft = true,
                                       );
-                                      Navigator.pop(
-                                        context,
-                                      ); // Close bottom sheet
 
-                                      // Update UI
-                                      setState(() {
-                                        _loadFuture = _loadAllData();
-                                        _selectedDocumentsDraftsNewFiles
-                                            .clear();
-                                        _documentDraftsAttachmentsToDelete
-                                            .clear();
-                                        _documentDraftsExistingAttachments
-                                            .clear();
-                                      });
-                                    }
-                                  } else {
-                                    throw Exception("Operation failed");
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(
-                                      context,
-                                    ).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          "✗ Error: ${e.toString()}",
-                                        ),
-                                        backgroundColor: Colors.red,
-                                        duration: const Duration(
-                                          seconds: 3,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                } finally {
-                                  setModalState(
-                                        () => _isUploadingDraft = false,
-                                  );
-                                }
-                              },
+                                      // Disable the button by showing loading state
+                                      try {
+                                        bool success;
+
+                                        if (isUpdate) {
+                                          success = await draftService.updateDraft(
+                                            draftId: documentDrafts!.id,
+                                            advocateId:
+                                                documentDrafts!.advocateId,
+                                            caseId: documentDrafts!.caseId,
+                                            userId: widget.advocateUserId!,
+                                            existingFiles:
+                                                _documentDraftsExistingAttachments,
+                                            newFiles:
+                                                _selectedDocumentsDraftsNewFiles,
+                                          );
+                                        } else {
+                                          success = await draftService.addDraft(
+                                            advocateId: widget.advocateId ?? "",
+                                            caseId: widget.caseId!,
+                                            userId: widget.advocateUserId!,
+                                            files:
+                                                _selectedDocumentsDraftsNewFiles,
+                                          );
+                                        }
+
+                                        if (success) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  isUpdate
+                                                      ? "✓ Document draft updated successfully"
+                                                      : "✓ Document draft created successfully",
+                                                ),
+                                                backgroundColor: Colors.green,
+                                                duration: const Duration(
+                                                  seconds: 2,
+                                                ),
+                                              ),
+                                            );
+                                            Navigator.pop(
+                                              context,
+                                            ); // Close bottom sheet
+
+                                            // Update UI
+                                            setState(() {
+                                              _loadFuture = _loadAllData();
+                                              _selectedDocumentsDraftsNewFiles
+                                                  .clear();
+                                              _documentDraftsAttachmentsToDelete
+                                                  .clear();
+                                              _documentDraftsExistingAttachments
+                                                  .clear();
+                                            });
+                                          }
+                                        } else {
+                                          throw Exception("Operation failed");
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                "✗ Error: ${e.toString()}",
+                                              ),
+                                              backgroundColor: Colors.red,
+                                              duration: const Duration(
+                                                seconds: 3,
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      } finally {
+                                        setModalState(
+                                          () => _isUploadingDraft = false,
+                                        );
+                                      }
+                                    },
                             ),
                         ],
                       ),
@@ -848,7 +874,7 @@ class _CaseTrackingState extends State<CaseTracking> {
 
   String? _paymentTypeForTitle(String title) {
     switch (title) {
-    // Basic Case Flow
+      // Basic Case Flow
       case "Case Request":
         return "CASE_REQUEST_PAYMENT";
       case "Document Drafting":
@@ -868,7 +894,7 @@ class _CaseTrackingState extends State<CaseTracking> {
       case "Case Filing / Registration":
         return "CASE_FILING_PAYMENT";
 
-    // Consultation
+      // Consultation
       case "Initial Consultation":
         return "CASE_INITIAL_CONSULTATION_PAYMENT";
       case "Legal Advice":
@@ -890,7 +916,7 @@ class _CaseTrackingState extends State<CaseTracking> {
       case "Case Analysis":
         return "CASE_CASE_ANALYSIS_PAYMENT";
 
-    // Documentation
+      // Documentation
       case "Document Preparation":
         return "CASE_DOCUMENT_PREPARATION_PAYMENT";
       case "Document Correction":
@@ -912,7 +938,7 @@ class _CaseTrackingState extends State<CaseTracking> {
       case "Document Authentication":
         return "CASE_DOCUMENT_AUTHENTICATION_PAYMENT";
 
-    // Filing
+      // Filing
       case "Case Registration":
         return "CASE_REGISTRATION_PAYMENT";
       case "Case Acceptance":
@@ -934,7 +960,7 @@ class _CaseTrackingState extends State<CaseTracking> {
       case "Case Merge":
         return "CASE_CASE_MERGE_PAYMENT";
 
-    // Evidence
+      // Evidence
       case "Evidence Presentation":
         return "CASE_EVIDENCE_PRESENTATION_PAYMENT";
       case "Evidence Verification":
@@ -956,7 +982,7 @@ class _CaseTrackingState extends State<CaseTracking> {
       case "Investigation":
         return "CASE_INVESTIGATION_PAYMENT";
 
-    // Hearing
+      // Hearing
       case "Pre Hearing":
         return "CASE_PRE_HEARING_PAYMENT";
       case "Interim Hearing":
@@ -978,7 +1004,7 @@ class _CaseTrackingState extends State<CaseTracking> {
       case "Hearing Review":
         return "CASE_HEARING_REVIEW_PAYMENT";
 
-    // Appeals
+      // Appeals
       case "Appeal Preparation":
         return "CASE_APPEAL_PREPARATION_PAYMENT";
       case "Appeal Document":
@@ -1000,7 +1026,7 @@ class _CaseTrackingState extends State<CaseTracking> {
       case "Revision Petition":
         return "CASE_REVISION_PETITION_PAYMENT";
 
-    // Settlement
+      // Settlement
       case "Mediation":
         return "CASE_MEDIATION_PAYMENT";
       case "Arbitration":
@@ -1022,7 +1048,7 @@ class _CaseTrackingState extends State<CaseTracking> {
       case "Compensation Approval":
         return "CASE_COMPENSATION_APPROVAL_PAYMENT";
 
-    // Judgment
+      // Judgment
       case "Judgment Preparation":
         return "CASE_JUDGMENT_PREPARATION_PAYMENT";
       case "Judgment Review":
@@ -1034,7 +1060,7 @@ class _CaseTrackingState extends State<CaseTracking> {
       case "Judgment Execution":
         return "CASE_JUDGMENT_EXECUTION_PAYMENT";
 
-    // Closing
+      // Closing
       case "Final Settlement":
         return "CASE_FINAL_SETTLEMENT_PAYMENT";
       case "Case Completion":
@@ -1062,10 +1088,10 @@ class _CaseTrackingState extends State<CaseTracking> {
   }
 
   void _showPriceEditDialog(
-      String title,
-      String? paymentTypeEnumStr,
-      bool isAddMode,
-      ) async {
+    String title,
+    String? paymentTypeEnumStr,
+    bool isAddMode,
+  ) async {
     if (paymentTypeEnumStr == null) return;
 
     final controller = TextEditingController();
@@ -1122,31 +1148,31 @@ class _CaseTrackingState extends State<CaseTracking> {
 
                   final response = isAddMode
                       ? await http.post(
-                    Uri.parse(url),
-                    headers: {
-                      'Authorization': 'Bearer $token',
-                      'Content-Type': 'application/json',
-                    },
-                    body: jsonEncode({
-                      "caseId": widget.caseId,
-                      "paymentFor": paymentTypeEnumStr,
-                      "price": price,
-                      "userId": userId,
-                    }),
-                  )
+                          Uri.parse(url),
+                          headers: {
+                            'Authorization': 'Bearer $token',
+                            'Content-Type': 'application/json',
+                          },
+                          body: jsonEncode({
+                            "caseId": widget.caseId,
+                            "paymentFor": paymentTypeEnumStr,
+                            "price": price,
+                            "userId": userId,
+                          }),
+                        )
                       : await http.put(
-                    Uri.parse(url),
-                    headers: {
-                      'Authorization': 'Bearer $token',
-                      'Content-Type': 'application/json',
-                    },
-                    body: jsonEncode({
-                      "caseId": widget.caseId,
-                      "paymentFor": paymentTypeEnumStr,
-                      "price": price,
-                      "userId": userId,
-                    }),
-                  );
+                          Uri.parse(url),
+                          headers: {
+                            'Authorization': 'Bearer $token',
+                            'Content-Type': 'application/json',
+                          },
+                          body: jsonEncode({
+                            "caseId": widget.caseId,
+                            "paymentFor": paymentTypeEnumStr,
+                            "price": price,
+                            "userId": userId,
+                          }),
+                        );
 
                   if (response.statusCode == 200 ||
                       response.statusCode == 201) {
@@ -1195,7 +1221,7 @@ class _CaseTrackingState extends State<CaseTracking> {
     final nextNumber = hearings.isEmpty
         ? 1
         : hearings.map((h) => h.hearingNumber).reduce((a, b) => a > b ? a : b) +
-        1;
+              1;
 
     final hearingNumber = isUpdate ? hearing.hearingNumber : nextNumber;
 
@@ -1288,8 +1314,8 @@ class _CaseTrackingState extends State<CaseTracking> {
 
                             // New files
                             ..._selectedHearingNewFiles.asMap().entries.map((
-                                entry,
-                                ) {
+                              entry,
+                            ) {
                               final idx = entry.key;
                               final file = entry.value;
                               return ListTile(
@@ -1480,58 +1506,6 @@ class _CaseTrackingState extends State<CaseTracking> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600; // Mobile / small tablet
-    final padding = ResponsiveHelper.padding(context, 12);
-    final spacing = ResponsiveHelper.padding(context, 12);
-
-    return Scaffold(
-      backgroundColor: Colors.white70,
-      appBar: AppBar(
-        title: const Text("Ukil App"),
-        centerTitle: true,
-        backgroundColor: Colors.green,
-        toolbarHeight: ResponsiveHelper.buttonHeight(context) * 1.2,
-      ),
-      body: FutureBuilder(
-        future: _loadFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          // ================= RESPONSIVE LAYOUT =================
-          return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            scrollDirection: Axis.vertical,
-
-            child: isSmallScreen
-                ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildMainLeftContent(spacing),
-                SizedBox(height: spacing * 2),
-                _buildMainRightContent(spacing),
-              ],
-            )
-                : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // LEFT SIDE (Timeline, Summary, Judgment, Rating)
-                Expanded(flex: 2, child: _buildMainLeftContent(spacing)),
-                const SizedBox(width: 16),
-                // RIGHT SIDE (Draft, Hearings, Read Status, Close, Chat)
-                Expanded(flex: 1, child: _buildMainRightContent(spacing)),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   // Responsive Button Helper
   Widget _buildResponsiveButton({
     required IconData icon,
@@ -1628,10 +1602,10 @@ class _CaseTrackingState extends State<CaseTracking> {
   Widget _timelineTile(TimelineStep step) {
     final isAdvocate =
         presentUsersAdvocateId != null &&
-            presentUsersAdvocateId == widget.advocateId;
+        presentUsersAdvocateId == widget.advocateId;
 
     final matchingStage = caseTrackings.firstWhere(
-          (ct) => _prettyStageName(ct.caseStage) == step.title,
+      (ct) => _prettyStageName(ct.caseStage) == step.title,
       orElse: () =>
           CaseTrackingStage(caseId: "", caseStage: "", stageNumber: 0),
     );
@@ -1750,7 +1724,7 @@ class _CaseTrackingState extends State<CaseTracking> {
                           final prefs = await SharedPreferences.getInstance();
                           final userId =
                               prefs.getString('userId') ??
-                                  widget.advocateUserId;
+                              widget.advocateUserId;
                           final token = prefs.getString('jwt_token');
 
                           final response = await http.delete(
@@ -1786,7 +1760,7 @@ class _CaseTrackingState extends State<CaseTracking> {
   Widget _hearingCard() {
     final isAdvocate =
         presentUsersAdvocateId != null &&
-            presentUsersAdvocateId == widget.advocateId;
+        presentUsersAdvocateId == widget.advocateId;
 
     // Correct logic: To add the NEXT hearing, price for it must be set first
     final canAddNextHearing = _hearingPriceCount >= hearings.length + 1;
@@ -1868,7 +1842,7 @@ class _CaseTrackingState extends State<CaseTracking> {
   Widget _hearingTile(Hearing hearing) {
     final isAdvocate =
         presentUsersAdvocateId != null &&
-            presentUsersAdvocateId == widget.advocateId;
+        presentUsersAdvocateId == widget.advocateId;
 
     // Get price for this specific hearing (using hearing number)
     final paymentType = "CASE_HEARING_PAYMENT"; // same type for all hearings
@@ -1910,16 +1884,16 @@ class _CaseTrackingState extends State<CaseTracking> {
         ),
         trailing: hearing.attachmentsId.isNotEmpty
             ? Column(
-          children: [
-            Text(
-              "${hearing.attachmentsId.length} files",
-              style: const TextStyle(
-                color: Colors.blue,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        )
+                children: [
+                  Text(
+                    "${hearing.attachmentsId.length} files",
+                    style: const TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              )
             : null,
         children: [
           // ---------- ATTACHMENTS ----------
@@ -1932,21 +1906,21 @@ class _CaseTrackingState extends State<CaseTracking> {
                 children: hearing.attachmentsId
                     .map(
                       (attachmentId) => ListTile(
-                    leading: const Icon(Icons.insert_drive_file),
-                    title: Text(attachmentId),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => HearingAttachmentView(
-                            attachmentId: attachmentId,
-                            jwtToken: widget.token!,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                )
+                        leading: const Icon(Icons.insert_drive_file),
+                        title: Text(attachmentId),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => HearingAttachmentView(
+                                attachmentId: attachmentId,
+                                jwtToken: widget.token!,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    )
                     .toList(),
               ),
             ),
@@ -2055,93 +2029,93 @@ class _CaseTrackingState extends State<CaseTracking> {
           trailing: draft.attachmentsId.isEmpty
               ? null
               : SizedBox(
-            width: 110,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Text(
-                  "${draft.attachmentsId.length} files",
-                  style: const TextStyle(
-                    color: Colors.blue,
-                    fontWeight: FontWeight.bold,
+                  width: 110,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        "${draft.attachmentsId.length} files",
+                        style: const TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (presentUsersAdvocateId != null &&
+                          widget.advocateId == presentUsersAdvocateId)
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () async {
+                            // Show confirmation dialog
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text("Delete Document Draft"),
+                                content: const Text(
+                                  "Are you sure you want to delete this document draft?",
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text("Cancel"),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                    ),
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text("Delete"),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirm != true) return;
+
+                            await _showLoadingDialog(
+                              loadingMessage: "Deleting document draft...",
+                              task: () async {
+                                SharedPreferences prefs =
+                                    await SharedPreferences.getInstance();
+                                final token = prefs.getString('jwt_token');
+                                final userId = prefs.getString('userId');
+
+                                final response = await http.delete(
+                                  Uri.parse(
+                                    "${BASE_URL.Urls().baseURL}document-draft/${draft.id}?userId=$userId",
+                                  ),
+                                  headers: {
+                                    'Authorization': 'Bearer $token',
+                                    'content-type': 'application/json',
+                                  },
+                                );
+
+                                if (response.statusCode == 200) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          "✓ Document draft deleted successfully",
+                                        ),
+                                        backgroundColor: Colors.green,
+                                      ),
+                                    );
+                                    setState(() {
+                                      _loadFuture = _loadAllData();
+                                    });
+                                  }
+                                } else {
+                                  throw Exception("Failed to delete");
+                                }
+                              },
+                            );
+                          },
+                        ),
+                    ],
                   ),
                 ),
-                if (presentUsersAdvocateId != null &&
-                    widget.advocateId == presentUsersAdvocateId)
-                  IconButton(
-                    icon: const Icon(Icons.delete),
-                    onPressed: () async {
-                      // Show confirmation dialog
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text("Delete Document Draft"),
-                          content: const Text(
-                            "Are you sure you want to delete this document draft?",
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(context, false),
-                              child: const Text("Cancel"),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                              ),
-                              onPressed: () =>
-                                  Navigator.pop(context, true),
-                              child: const Text("Delete"),
-                            ),
-                          ],
-                        ),
-                      );
-
-                      if (confirm != true) return;
-
-                      await _showLoadingDialog(
-                        loadingMessage: "Deleting document draft...",
-                        task: () async {
-                          SharedPreferences prefs =
-                          await SharedPreferences.getInstance();
-                          final token = prefs.getString('jwt_token');
-                          final userId = prefs.getString('userId');
-
-                          final response = await http.delete(
-                            Uri.parse(
-                              "${BASE_URL.Urls().baseURL}document-draft/${draft.id}?userId=$userId",
-                            ),
-                            headers: {
-                              'Authorization': 'Bearer $token',
-                              'content-type': 'application/json',
-                            },
-                          );
-
-                          if (response.statusCode == 200) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    "✓ Document draft deleted successfully",
-                                  ),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                              setState(() {
-                                _loadFuture = _loadAllData();
-                              });
-                            }
-                          } else {
-                            throw Exception("Failed to delete");
-                          }
-                        },
-                      );
-                    },
-                  ),
-              ],
-            ),
-          ),
           onTap: () {
             if (draft.attachmentsId.isNotEmpty) {
               _showDraftAttachmentSheet(draft);
@@ -2173,7 +2147,7 @@ class _CaseTrackingState extends State<CaseTracking> {
                 const SizedBox(height: 12),
 
                 ...draft.attachmentsId.map(
-                      (attachmentId) => Card(
+                  (attachmentId) => Card(
                     child: ListTile(
                       leading: const Icon(Icons.insert_drive_file),
                       title: Text(attachmentId),
@@ -2246,7 +2220,7 @@ class _CaseTrackingState extends State<CaseTracking> {
   Widget _caseJudgmentTile(CaseJudgment caseJudgment) {
     final isAdvocate =
         presentUsersAdvocateId != null &&
-            presentUsersAdvocateId == widget.advocateId;
+        presentUsersAdvocateId == widget.advocateId;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -2267,23 +2241,23 @@ class _CaseTrackingState extends State<CaseTracking> {
         subtitle: caseJudgment.judgmentAttachmentId == null
             ? null
             : Text(
-          caseJudgment.judgmentAttachmentId!,
-          style: const TextStyle(
-            color: Colors.blue,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+                caseJudgment.judgmentAttachmentId!,
+                style: const TextStyle(
+                  color: Colors.blue,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
 
         onTap: caseJudgment.judgmentAttachmentId != null
             ? () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CaseJudgmentAttachmentView(
-              attachmentId: caseJudgment.judgmentAttachmentId!,
-              jwtToken: widget.token!,
-            ),
-          ),
-        )
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CaseJudgmentAttachmentView(
+                    attachmentId: caseJudgment.judgmentAttachmentId!,
+                    jwtToken: widget.token!,
+                  ),
+                ),
+              )
             : null,
       ),
     );
@@ -2531,7 +2505,7 @@ class _CaseTrackingState extends State<CaseTracking> {
   Widget _readStatusCard() {
     final isAdvocate =
         presentUsersAdvocateId != null &&
-            presentUsersAdvocateId == widget.advocateId;
+        presentUsersAdvocateId == widget.advocateId;
 
     return Card(
       elevation: 3,
@@ -2579,7 +2553,7 @@ class _CaseTrackingState extends State<CaseTracking> {
   Widget _readStatusTile(ReadStatus rs) {
     final isAdvocate =
         presentUsersAdvocateId != null &&
-            presentUsersAdvocateId == widget.advocateId;
+        presentUsersAdvocateId == widget.advocateId;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -2602,90 +2576,90 @@ class _CaseTrackingState extends State<CaseTracking> {
         // ✅ THREE DOT MENU (Popup) - Compact & No Overflow
         trailing: isAdvocate
             ? PopupMenuButton<String>(
-          icon: const Icon(Icons.more_vert, color: Colors.grey),
-          onSelected: (value) async {
-            if (value == "edit") {
-              _showReadStatusBottomSheet(rs);
-            } else if (value == "delete") {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text("Delete Read Status"),
-                  content: const Text(
-                    "Are you sure you want to delete this read status?",
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text("Cancel"),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
+                icon: const Icon(Icons.more_vert, color: Colors.grey),
+                onSelected: (value) async {
+                  if (value == "edit") {
+                    _showReadStatusBottomSheet(rs);
+                  } else if (value == "delete") {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text("Delete Read Status"),
+                        content: const Text(
+                          "Are you sure you want to delete this read status?",
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text("Cancel"),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                            ),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text("Delete"),
+                          ),
+                        ],
                       ),
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text("Delete"),
-                    ),
-                  ],
-                ),
-              );
+                    );
 
-              if (confirm != true) return;
+                    if (confirm != true) return;
 
-              await _showLoadingDialog(
-                loadingMessage: "Deleting read status...",
-                task: () async {
-                  final prefs = await SharedPreferences.getInstance();
-                  final userId =
-                      widget.advocateUserId ?? prefs.getString('userId');
-                  if (userId == null)
-                    throw Exception("User ID not found");
+                    await _showLoadingDialog(
+                      loadingMessage: "Deleting read status...",
+                      task: () async {
+                        final prefs = await SharedPreferences.getInstance();
+                        final userId =
+                            widget.advocateUserId ?? prefs.getString('userId');
+                        if (userId == null)
+                          throw Exception("User ID not found");
 
-                  final response = await http.delete(
-                    Uri.parse(
-                      "${BASE_URL.Urls().baseURL}read-status/${rs.id}/$userId",
-                    ),
-                    headers: {'Authorization': 'Bearer ${widget.token!}'},
-                  );
+                        final response = await http.delete(
+                          Uri.parse(
+                            "${BASE_URL.Urls().baseURL}read-status/${rs.id}/$userId",
+                          ),
+                          headers: {'Authorization': 'Bearer ${widget.token!}'},
+                        );
 
-                  if (response.statusCode == 200) {
-                    return true;
-                  } else {
-                    throw Exception("Failed to delete");
+                        if (response.statusCode == 200) {
+                          return true;
+                        } else {
+                          throw Exception("Failed to delete");
+                        }
+                      },
+                    );
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("✓ Read status deleted successfully"),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      setState(() {
+                        _loadFuture = _loadAllData();
+                      });
+                    }
                   }
                 },
-              );
-
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("✓ Read status deleted successfully"),
-                    backgroundColor: Colors.green,
+                itemBuilder: (context) => [
+                  const PopupMenuItem<String>(
+                    value: "edit",
+                    child: ListTile(
+                      leading: Icon(Icons.edit, color: Colors.green),
+                      title: Text("Edit"),
+                    ),
                   ),
-                );
-                setState(() {
-                  _loadFuture = _loadAllData();
-                });
-              }
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem<String>(
-              value: "edit",
-              child: ListTile(
-                leading: Icon(Icons.edit, color: Colors.green),
-                title: Text("Edit"),
-              ),
-            ),
-            const PopupMenuItem<String>(
-              value: "delete",
-              child: ListTile(
-                leading: Icon(Icons.delete, color: Colors.red),
-                title: Text("Delete"),
-              ),
-            ),
-          ],
-        )
+                  const PopupMenuItem<String>(
+                    value: "delete",
+                    child: ListTile(
+                      leading: Icon(Icons.delete, color: Colors.red),
+                      title: Text("Delete"),
+                    ),
+                  ),
+                ],
+              )
             : null,
       ),
     );
@@ -2736,10 +2710,10 @@ class _CaseTrackingState extends State<CaseTracking> {
                     ElevatedButton.icon(
                       icon: _isUpdatingReadStatus
                           ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : const Icon(Icons.save),
                       label: Text(
                         _isUpdatingReadStatus
@@ -2753,58 +2727,58 @@ class _CaseTrackingState extends State<CaseTracking> {
                       onPressed: _isUpdatingReadStatus
                           ? null
                           : () async {
-                        setModalState(() => _isUpdatingReadStatus = true);
+                              setModalState(() => _isUpdatingReadStatus = true);
 
-                        try {
-                          final success = isUpdate
-                              ? await _updateReadStatus(
-                            existing!.id!,
-                            statusController.text,
-                          )
-                              : await _addReadStatus(
-                            statusController.text,
-                          );
+                              try {
+                                final success = isUpdate
+                                    ? await _updateReadStatus(
+                                        existing!.id!,
+                                        statusController.text,
+                                      )
+                                    : await _addReadStatus(
+                                        statusController.text,
+                                      );
 
-                          if (success) {
-                            await _loadAllData(); // ← LOADER STAYS UNTIL FULL REFRESH
-                          } else {
-                            throw Exception(
-                              "Failed to do the changes at here....",
-                            );
-                          }
+                                if (success) {
+                                  await _loadAllData(); // ← LOADER STAYS UNTIL FULL REFRESH
+                                } else {
+                                  throw Exception(
+                                    "Failed to do the changes at here....",
+                                  );
+                                }
 
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  isUpdate
-                                      ? "✓ Read status updated successfully"
-                                      : "✓ Read status added successfully",
-                                ),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                            Navigator.pop(context);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        isUpdate
+                                            ? "✓ Read status updated successfully"
+                                            : "✓ Read status added successfully",
+                                      ),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                  Navigator.pop(context);
 
-                            setState(() {
-                              _loadFuture = _loadAllData();
-                            });
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text("✗ Error: $e"),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        } finally {
-                          setModalState(
-                                () => _isUpdatingReadStatus = false,
-                          );
-                        }
-                      },
+                                  setState(() {
+                                    _loadFuture = _loadAllData();
+                                  });
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text("✗ Error: $e"),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              } finally {
+                                setModalState(
+                                  () => _isUpdatingReadStatus = false,
+                                );
+                              }
+                            },
                     ),
                   ],
                 ),
@@ -2820,7 +2794,7 @@ class _CaseTrackingState extends State<CaseTracking> {
   Widget _caseTrackingCard() {
     final isAdvocate =
         presentUsersAdvocateId != null &&
-            presentUsersAdvocateId == widget.advocateId;
+        presentUsersAdvocateId == widget.advocateId;
 
     final padding = ResponsiveHelper.padding(context, 12);
     final titleSize = ResponsiveHelper.fontSize(context, 18);
@@ -2910,8 +2884,8 @@ class _CaseTrackingState extends State<CaseTracking> {
                         border: OutlineInputBorder(),
                       ),
                       items: CASE_STAGES.CaseStages().allCasePaymentStages.map((
-                          stage,
-                          ) {
+                        stage,
+                      ) {
                         return DropdownMenuItem<String>(
                           value: stage,
                           child: Text(_prettyStageName(stage)),
@@ -2927,10 +2901,10 @@ class _CaseTrackingState extends State<CaseTracking> {
                     ElevatedButton.icon(
                       icon: _isUpdatingCaseTracking
                           ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : const Icon(Icons.save),
                       label: Text(
                         _isUpdatingCaseTracking
@@ -2942,59 +2916,59 @@ class _CaseTrackingState extends State<CaseTracking> {
                         minimumSize: const Size(double.infinity, 48),
                       ),
                       onPressed:
-                      (_isUpdatingCaseTracking || selectedStage == null)
+                          (_isUpdatingCaseTracking || selectedStage == null)
                           ? null
                           : () async {
-                        setModalState(
-                              () => _isUpdatingCaseTracking = true,
-                        );
-
-                        try {
-                          await _showLoadingDialog(
-                            loadingMessage: "Saving stage...",
-                            task: () async {
-                              final success = isUpdate
-                                  ? await _updateCaseTracking(
-                                existing!.id!,
-                                selectedStage!,
-                              )
-                                  : await _addCaseTracking(
-                                selectedStage!,
+                              setModalState(
+                                () => _isUpdatingCaseTracking = true,
                               );
 
-                              if (success) {
+                              try {
+                                await _showLoadingDialog(
+                                  loadingMessage: "Saving stage...",
+                                  task: () async {
+                                    final success = isUpdate
+                                        ? await _updateCaseTracking(
+                                            existing!.id!,
+                                            selectedStage!,
+                                          )
+                                        : await _addCaseTracking(
+                                            selectedStage!,
+                                          );
+
+                                    if (success) {
+                                      if (context.mounted) {
+                                        setState(() {
+                                          _loadFuture = _loadAllData();
+                                        });
+                                      }
+                                    }
+                                  },
+                                );
+
                                 if (context.mounted) {
-                                  setState(() {
-                                    _loadFuture = _loadAllData();
-                                  });
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        isUpdate
+                                            ? "✓ Timeline stage updated"
+                                            : "✓ New timeline stage added",
+                                      ),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                  Navigator.pop(context);
                                 }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                }
+                              } finally {
+                                setModalState(
+                                  () => _isUpdatingCaseTracking = false,
+                                );
                               }
                             },
-                          );
-
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  isUpdate
-                                      ? "✓ Timeline stage updated"
-                                      : "✓ New timeline stage added",
-                                ),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                            Navigator.pop(context);
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                          }
-                        } finally {
-                          setModalState(
-                                () => _isUpdatingCaseTracking = false,
-                          );
-                        }
-                      },
                     ),
                   ],
                 ),
@@ -3007,14 +2981,20 @@ class _CaseTrackingState extends State<CaseTracking> {
   }
 
   Widget _caseTrackingTile(CaseTrackingStage ct) {
+    print("visibility :- ${ct.visibility}");
+
     final isAdvocate =
         presentUsersAdvocateId != null &&
-            presentUsersAdvocateId == widget.advocateId;
+        presentUsersAdvocateId == widget.advocateId;
     final index = caseTrackings.indexOf(ct);
     final canUp = index > 0;
     final canDown = index < caseTrackings.length - 1;
     final currentPayment = stagePayments[ct.caseStage];
     final currentPrice = currentPayment?.price ?? 0;
+
+    final dateVisibility = ct.visibility;
+
+    print('date visibility :- $dateVisibility');
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallMobile = screenWidth < 480;
@@ -3077,7 +3057,8 @@ class _CaseTrackingState extends State<CaseTracking> {
                       color: Colors.grey.shade600,
                     ),
                   ),
-                  if(ct.trackingTime != null)
+                  if (ct.trackingTime != null &&
+                      (ct.visibility == null || ct.visibility == true))
                     Text(
                       "${ct.trackingTime}",
                       style: TextStyle(
@@ -3111,6 +3092,1339 @@ class _CaseTrackingState extends State<CaseTracking> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildModernCard({
+    required Widget child,
+    String? title,
+    IconData? icon,
+    Color? color,
+    bool withGradient = true,
+  }) {
+    final cardColor = color ?? Colors.deepPurple;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        gradient: withGradient
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Colors.white, cardColor.withOpacity(0.05)],
+              )
+            : null,
+        color: !withGradient ? Colors.white : null,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: cardColor.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (title != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+              child: Row(
+                children: [
+                  if (icon != null)
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: cardColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(icon, color: cardColor, size: 22),
+                    ),
+                  if (icon != null) const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: cardColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: child,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, {IconData? icon}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.deepPurple.shade50,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon ?? Icons.info,
+              size: 16,
+              color: Colors.deepPurple.shade600,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: Colors.grey.shade500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGradientButton({
+    required String text,
+    required IconData icon,
+    required VoidCallback? onPressed,
+    Color color = Colors.deepPurple,
+  }) {
+    return Container(
+      width: double.infinity,
+      height: 52,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color, Color.lerp(color, Colors.black, 0.3)!],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, color: Colors.white, size: 20),
+        label: Text(
+          text,
+          style: GoogleFonts.inter(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _modernCaseSummaryCard() {
+    return _buildModernCard(
+      title: "Case Summary",
+      icon: Icons.description,
+      color: Colors.deepPurple,
+      child: Column(
+        children: [
+          _buildInfoRow(
+            "Case Title",
+            widget.caseName ?? "N/A",
+            icon: Icons.gavel,
+          ),
+          _buildInfoRow(
+            "Lawyer",
+            widget.caseLawyer ?? "Not Assigned",
+            icon: Icons.person,
+          ),
+          _buildInfoRow(
+            "Issued Date",
+            widget.issuedTime ?? "N/A",
+            icon: Icons.calendar_today,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Replace your _modernCaseTrackingCard method with this:
+  Widget _modernCaseTrackingCard() {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+        presentUsersAdvocateId == widget.advocateId;
+
+    return _buildModernCard(
+      title: "Case Tracking Stages",
+      icon: Icons.timeline,
+      color: Colors.deepPurple,
+      child: Column(
+        children: [
+          if (caseTrackings.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.timeline_outlined,
+                    size: 48,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "No tracking stages added",
+                    style: GoogleFonts.inter(color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...caseTrackings.map(
+              (ct) => _modernTrackingTile(ct),
+            ), // ← CHANGE THIS: use _modernTrackingTile instead of _modernTimelineTile
+          const SizedBox(height: 16),
+          if (isAdvocate)
+            _buildGradientButton(
+              text: "Add Stage",
+              icon: Icons.add,
+              onPressed: () => _showCaseTrackingBottomSheet(null),
+              color: Colors.deepPurple,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modernTimelineTile(CaseTrackingStage ct, int index) {
+    final isLast = index == caseTrackings.length - 1;
+    final currentPayment = stagePayments[ct.caseStage];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.deepPurple.shade400,
+                      Colors.deepPurple.shade700,
+                    ],
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    "${index + 1}",
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              if (!isLast)
+                Container(
+                  width: 2,
+                  height: 40,
+                  color: Colors.deepPurple.shade200,
+                ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _prettyStageName(ct.caseStage),
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Stage ${ct.stageNumber}",
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                  if (currentPayment != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade100,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        "৳${currentPayment.price.toStringAsFixed(0)}",
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green.shade700,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modernJudgmentCard() {
+    return _buildModernCard(
+      title: "Case Judgment",
+      icon: Icons.description,
+      color: Colors.green,
+      child: Column(
+        children: [
+          _buildInfoRow(
+            "Result",
+            caseJudgment?.result ?? "N/A",
+            icon: Icons.gavel,
+          ),
+          _buildInfoRow(
+            "Date",
+            caseJudgment != null
+                ? DateFormat('dd MMM yyyy').format(caseJudgment!.date)
+                : "N/A",
+            icon: Icons.calendar_today,
+          ),
+          if (caseJudgment?.judgmentAttachmentId != null)
+            _buildGradientButton(
+              text: "View Judgment Document",
+              icon: Icons.picture_as_pdf,
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CaseJudgmentAttachmentView(
+                    attachmentId: caseJudgment!.judgmentAttachmentId!,
+                    jwtToken: widget.token!,
+                  ),
+                ),
+              ),
+              color: Colors.green,
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Replace your _modernHearingCard with this:
+  Widget _modernHearingCard() {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+        presentUsersAdvocateId == widget.advocateId;
+
+    // Correct logic: To add the NEXT hearing, price for it must be set first
+    final canAddNextHearing = _hearingPriceCount >= hearings.length + 1;
+
+    return _buildModernCard(
+      title: "Hearings",
+      icon: Icons.gavel,
+      color: Colors.orange,
+      child: Column(
+        children: [
+          if (hearings.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  Icon(Icons.event_busy, size: 48, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  Text(
+                    "No hearings scheduled",
+                    style: GoogleFonts.inter(color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...hearings.map((hearing) => _modernHearingTile(hearing)),
+          const SizedBox(height: 16),
+          if (isAdvocate)
+            Column(
+              children: [
+                // 1. Hearing Price button - only when next price is NOT set
+                if (!canAddNextHearing)
+                  _buildGradientButton(
+                    text: "Set Price for Hearing #${hearings.length + 1}",
+                    icon: Icons.attach_money,
+                    onPressed: () {
+                      _showPriceEditDialog(
+                        "Hearing #${hearings.length + 1}",
+                        "CASE_HEARING_PAYMENT",
+                        true,
+                      );
+                    },
+                    color: Colors.green,
+                  ),
+                // 2. Add Hearing button - only when price is already set
+                if (canAddNextHearing)
+                  _buildGradientButton(
+                    text: "Add New Hearing",
+                    icon: Icons.add,
+                    onPressed: () async {
+                      await _showHearingBottomSheet(null);
+                      setState(() => _loadFuture = _loadAllData());
+                    },
+                    color: Colors.orange,
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Replace your _modernHearingTile with this (keeping your original appeal hearing logic):
+  Widget _modernHearingTile(Hearing hearing) {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+        presentUsersAdvocateId == widget.advocateId;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: ExpansionTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.orange.shade100,
+          radius: 20,
+          child: Icon(Icons.gavel, color: Colors.orange.shade700, size: 20),
+        ),
+        title: Text(
+          "Hearing #${hearing.hearingNumber}",
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 15),
+        ),
+        subtitle: Text(
+          "Date: ${_formatDate(hearing.issuedDate)}",
+          style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
+        ),
+        trailing: hearing.attachmentsId.isNotEmpty
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  "${hearing.attachmentsId.length} files",
+                  style: TextStyle(
+                    color: Colors.blue.shade700,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )
+            : null,
+        children: [
+          // ==================== ATTACHMENTS SECTION ====================
+          if (hearing.attachmentsId.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Attachments",
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  ...hearing.attachmentsId.map(
+                    (attachmentId) => Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.insert_drive_file,
+                          color: Colors.orange.shade700,
+                        ),
+                        title: Text(
+                          attachmentId.length > 30
+                              ? '${attachmentId.substring(0, 27)}...'
+                              : attachmentId,
+                          style: GoogleFonts.inter(fontSize: 12),
+                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => HearingAttachmentView(
+                                attachmentId: attachmentId,
+                                jwtToken: widget.token!,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // ==================== APPEAL HEARINGS SECTION (KEPT YOUR ORIGINAL LOGIC) ====================
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: FutureBuilder<AppealHearing?>(
+              future: AppealHearingService.getByHearing(
+                widget.token!,
+                hearing.id,
+              ),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      "Failed to load appeal hearings",
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  );
+                }
+
+                final appeals = snapshot.data;
+
+                if (appeals == null) {
+                  return Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "No appeal hearing for this hearing",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                        if (widget.userId != null)
+                          ElevatedButton(
+                            onPressed: () {
+                              final result = Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      ScheduleAppealHearingPage(
+                                        token: widget.token!,
+                                        hearingId: hearing.id,
+                                        userId: widget.userId!,
+                                        needUpdate: false,
+                                      ),
+                                ),
+                              );
+                              if (result == true) {
+                                setState(() => _loadFuture = _loadAllData());
+                              }
+                            },
+                            child: Text(
+                              "Schedule Appeal Hearing",
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Text(
+                        "Appeal Hearings",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    _appealTile(
+                      appeals,
+                    ), // Using your original _appealTile method
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Add this new method for modern appeal tile
+  Widget _modernAppealTile(AppealHearing appeal) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.deepPurple.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.history, color: Colors.deepOrange, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  appeal.reason,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
+              ),
+              if (presentUsersAdvocateId != null &&
+                  presentUsersAdvocateId == widget.advocateId &&
+                  widget.userId != null)
+                PopupMenuButton<String>(
+                  onSelected: (value) async {
+                    if (value == "update") {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ScheduleAppealHearingPage(
+                            token: widget.token!,
+                            hearingId: appeal.hearingId,
+                            userId: widget.userId!,
+                            needUpdate: true,
+                          ),
+                        ),
+                      );
+                      if (result == true) {
+                        setState(() => _loadFuture = _loadAllData());
+                      }
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(value: "update", child: Text("Update")),
+                  ],
+                  child: const Icon(Icons.more_vert, size: 18),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (appeal.appealHearingTime != null)
+            Row(
+              children: [
+                Icon(
+                  Icons.calendar_today,
+                  size: 12,
+                  color: Colors.grey.shade500,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  "Appeal Date: ${_formatDate(appeal.appealHearingTime!)}",
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modernRatingCard() {
+    return _buildModernCard(
+      title: "Rate Advocate",
+      icon: Icons.star,
+      color: Colors.amber,
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (index) {
+              return GestureDetector(
+                onTap: () => setState(() => selectedStars = index + 1),
+                child: Icon(
+                  index < selectedStars ? Icons.star : Icons.star_border,
+                  color: Colors.amber,
+                  size: 40,
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Text(
+              "${selectedStars * 20} / 100",
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildGradientButton(
+            text: ratingId == null ? "Submit Rating" : "Update Rating",
+            icon: Icons.send,
+            onPressed: selectedStars == 0 ? null : () => _submitRating(),
+            color: Colors.amber,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modernChatButton() {
+    return _buildGradientButton(
+      text: "Chat with ${widget.caseLawyer}",
+      icon: Icons.chat,
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            otherUser: widget.advocateUserId,
+            othersName: widget.caseLawyer,
+            myName: widget.userName,
+            currentUser: widget.userId,
+          ),
+        ),
+      ),
+      color: Colors.teal,
+    );
+  }
+
+  // Just replace the build method with this updated version
+  // Keep all your other methods exactly the same
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 800; // Use 800 as breakpoint for better tablet support
+
+    return Scaffold(
+      backgroundColor: Colors.grey.shade100,
+      appBar: AppBar(
+        title: Text(
+          "Case Tracking",
+          style: GoogleFonts.poppins(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: const Color(0xFF1A237E), // Deep Navy
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF1A237E), // Deep Navy
+                Color(0xFF283593), // Indigo
+                Color(0xFF3949AB), // Lighter Indigo
+              ],
+            ),
+          ),
+        ),
+      ),
+      body: FutureBuilder(
+        future: _loadFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text("Loading case details..."),
+                ],
+              ),
+            );
+          }
+
+          return FadeTransition(
+            opacity: _fadeAnimation,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: isMobile
+                  ? Column(
+                children: [
+                  _modernCaseSummaryCard(),
+                  const SizedBox(height: 16),
+                  _modernCaseTrackingCard(),
+                  const SizedBox(height: 16),
+                  if (documentDrafts != null) _modernDocumentDraftCard(),
+                  const SizedBox(height: 16),
+                  if (caseJudgment != null) _modernJudgmentCard(),
+                  const SizedBox(height: 16),
+                  _modernHearingCard(),
+                  const SizedBox(height: 16),
+                  _modernReadStatusCard(),
+                  const SizedBox(height: 16),
+                  if (widget.userId != null) _modernRatingCard(),
+                  const SizedBox(height: 16),
+                  if (widget.userId != null) _modernCaseCloseButton(),
+                  const SizedBox(height: 16),
+                  if (widget.userId != null) _modernChatButton(),
+                ],
+              )
+                  : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // LEFT COLUMN
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      children: [
+                        _modernCaseSummaryCard(),
+                        const SizedBox(height: 16),
+                        _modernCaseTrackingCard(),
+                        const SizedBox(height: 16),
+                        if (caseJudgment != null) _modernJudgmentCard(),
+                        const SizedBox(height: 16),
+                        if (widget.userId != null) _modernRatingCard(),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // RIGHT COLUMN
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      children: [
+                        if (documentDrafts != null)
+                          _modernDocumentDraftCard()
+                        else
+                          _buildModernCard(
+                            title: "Document Draft",
+                            icon: Icons.description,
+                            color: Colors.grey,
+                            child: const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(32),
+                                child: Text("Not created yet"),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 16),
+                        _modernHearingCard(),
+                        const SizedBox(height: 16),
+                        _modernReadStatusCard(),
+                        const SizedBox(height: 16),
+                        if (widget.userId != null) _modernCaseCloseButton(),
+                        const SizedBox(height: 16),
+                        if (widget.userId != null) _modernChatButton(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _modernTrackingTile(CaseTrackingStage ct) {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+        presentUsersAdvocateId == widget.advocateId;
+    final currentPayment = stagePayments[ct.caseStage];
+    final currentPrice = currentPayment?.price ?? 0;
+
+    // Check if stage is completed (trackingTime exists AND is after issued date)
+    final isCompleted =
+        ct.trackingTime != null &&
+        (ct.visibility == null || ct.visibility == true) &&
+        ct.trackingTime!.isBefore(DateTime.now());
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isCompleted ? Colors.green.shade50 : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isCompleted ? Colors.green.shade200 : Colors.grey.shade200,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: isCompleted
+                        ? Colors.green.shade600
+                        : Colors.deepPurple.shade600,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _prettyStageName(ct.caseStage),
+                    style: GoogleFonts.poppins(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isCompleted
+                          ? Colors.green.shade800
+                          : Colors.grey.shade800,
+                    ),
+                  ),
+                ),
+                if (currentPrice > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      "৳${currentPrice.toStringAsFixed(0)}",
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                // Show star only if completed, otherwise show circle
+                Icon(
+                  isCompleted ? Icons.star : Icons.circle_outlined,
+                  size: 16,
+                  color: isCompleted
+                      ? Colors.amber.shade600
+                      : Colors.grey.shade400,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  "Stage ${ct.stageNumber}",
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: isCompleted
+                        ? Colors.green.shade600
+                        : Colors.grey.shade600,
+                  ),
+                ),
+                const Spacer(),
+                if (isAdvocate)
+                  Row(
+                    children: [
+                      if (currentPrice > 0)
+                        IconButton(
+                          icon: Icon(Icons.edit, size: 18, color: Colors.blue),
+                          onPressed: () => _showPriceEditDialog(
+                            _prettyStageName(ct.caseStage),
+                            ct.caseStage,
+                            false,
+                          ),
+                        ),
+                      if (currentPrice == 0)
+                        IconButton(
+                          icon: Icon(
+                            Icons.add_circle,
+                            size: 18,
+                            color: Colors.green,
+                          ),
+                          onPressed: () => _showPriceEditDialog(
+                            _prettyStageName(ct.caseStage),
+                            ct.caseStage,
+                            true,
+                          ),
+                        ),
+                      IconButton(
+                        icon: Icon(Icons.delete, size: 18, color: Colors.red),
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: const Text("Delete Stage"),
+                              content: const Text(
+                                "Delete this tracking stage?",
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text("Cancel"),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                  ),
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text("Delete"),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            await _deleteCaseTracking(ct.id!);
+                            setState(() => _loadFuture = _loadAllData());
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+            // Always show date if trackingTime exists
+            if (ct.trackingTime != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today,
+                      size: 12,
+                      color: Colors.grey.shade500,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatDate(ct.trackingTime!),
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        color: isCompleted
+                            ? Colors.green.shade700
+                            : Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Update the document draft card to show attachments viewer
+  Widget _modernDocumentDraftCard() {
+    return _buildModernCard(
+      title: "Document Draft",
+      icon: Icons.description,
+      color: Colors.green,
+      child: Column(
+        children: [
+          _buildInfoRow(
+            "Issued",
+            _formatDate(documentDrafts!.issuedDate),
+            icon: Icons.calendar_today,
+          ),
+          if (documentDrafts!.attachmentsId.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Divider(),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.attachment, size: 16, color: Colors.green.shade600),
+                const SizedBox(width: 8),
+                Text(
+                  "Attachments (${documentDrafts!.attachmentsId.length})",
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ...documentDrafts!.attachmentsId.map(
+              (id) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: ListTile(
+                  leading: Icon(
+                    Icons.insert_drive_file,
+                    color: Colors.green.shade600,
+                  ),
+                  title: Text(
+                    id.length > 30 ? '${id.substring(0, 27)}...' : id,
+                    style: GoogleFonts.inter(fontSize: 12),
+                  ),
+                  trailing: Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => DocumentDraftAttachmentView(
+                          attachmentId: id,
+                          jwtToken: widget.token!,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (presentUsersAdvocateId != null &&
+              widget.advocateId == presentUsersAdvocateId)
+            _buildGradientButton(
+              text: documentDrafts!.attachmentsId.isEmpty
+                  ? "Add Draft"
+                  : "Update Draft",
+              icon: documentDrafts!.attachmentsId.isEmpty
+                  ? Icons.add
+                  : Icons.edit,
+              onPressed: _showDocumentDraftBottomSheet,
+              color: Colors.green,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modernReadStatusCard() {
+    final isAdvocate =
+        presentUsersAdvocateId != null &&
+        presentUsersAdvocateId == widget.advocateId;
+
+    return _buildModernCard(
+      title: "Read Statuses",
+      icon: Icons.visibility,
+      color: Colors.blue,
+      child: Column(
+        children: [
+          if (readStatuses.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Text("No read status submitted yet"),
+            )
+          else
+            ...readStatuses.map((rs) => _modernReadStatusTile(rs)),
+          if (isAdvocate)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: _buildGradientButton(
+                text: "Add Status",
+                icon: Icons.add,
+                onPressed: () => _showReadStatusBottomSheet(null),
+                color: Colors.blue,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modernReadStatusTile(ReadStatus rs) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            rs.status,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _formatDate(rs.issuedTime),
+            style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modernCaseCloseButton() {
+    if (caseClose == null) {
+      return _buildGradientButton(
+        text: "Close Case",
+        icon: Icons.lock,
+        onPressed: () async {
+          // Your existing close case logic
+          CaseClose tempCaseClose = CaseClose.callingConstructor(
+            widget.caseId!,
+            widget.userId!,
+            false,
+            DateTime.now().toUtc(),
+          );
+          try {
+            tempCaseClose = await CaseCloseService.addCaseClose(
+              widget.token!,
+              widget.userId!,
+              tempCaseClose,
+            );
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Case closed successfully")),
+            );
+            setState(() => _loadFuture = _loadAllData());
+          } catch (e) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(e.toString())));
+          }
+        },
+        color: Colors.red,
+      );
+    }
+
+    if (caseClose!.open == true) {
+      return _buildGradientButton(
+        text: "Close Case",
+        icon: Icons.lock,
+        onPressed: () async {
+          // Your existing close case logic
+          CaseClose? tempCaseClose = await CaseCloseService.findByCaseId(
+            widget.token,
+            widget.caseId,
+          );
+          tempCaseClose?.open = false;
+          try {
+            await CaseCloseService.updateCaseClose(
+              widget.token!,
+              tempCaseClose!.id,
+              widget.userId!,
+              tempCaseClose,
+            );
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Case closed successfully")),
+            );
+            setState(() => _loadFuture = _loadAllData());
+          } catch (e) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(e.toString())));
+          }
+        },
+        color: Colors.red,
+      );
+    }
+
+    return _buildGradientButton(
+      text: "Reopen Case",
+      icon: Icons.lock_open,
+      onPressed: () async {
+        CaseClose? tempCaseClose = await CaseCloseService.findByCaseId(
+          widget.token,
+          widget.caseId,
+        );
+        tempCaseClose?.open = true;
+        try {
+          await CaseCloseService.updateCaseClose(
+            widget.token!,
+            tempCaseClose!.id,
+            widget.userId!,
+            tempCaseClose,
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Case reopened successfully")),
+          );
+          setState(() => _loadFuture = _loadAllData());
+        } catch (e) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(e.toString())));
+        }
+      },
+      color: Colors.orange,
     );
   }
 }

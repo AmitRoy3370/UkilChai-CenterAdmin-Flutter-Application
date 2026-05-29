@@ -2,11 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
-import './Admin.dart';
+import 'AdminDTO.dart';
 
 class AdminService {
-  static String baseUrl =
-      "${BASE_URL.Urls().baseURL}admin";
+  static String baseUrl = "${BASE_URL.Urls().baseURL}admin";
 
   // 🔐 Get JWT token
   Future<String> _getToken() async {
@@ -15,7 +14,7 @@ class AdminService {
   }
 
   // ================= GET ALL ADMINS =================
-  Future<List<Admin>> getAll() async {
+  Future<List<AdminDTO>> getAll() async {
     final token = await _getToken();
 
     final res = await http.get(
@@ -28,14 +27,14 @@ class AdminService {
 
     if (res.statusCode == 200) {
       List list = jsonDecode(res.body);
-      return list.map((e) => Admin.fromJson(e)).toList();
+      return list.map((e) => AdminDTO.fromJson(e)).toList();
     }
 
     throw Exception(res.body);
   }
 
   // ================= FIND BY USER ID =================
-  Future<Admin> findByUserId(String userId) async {
+  Future<AdminDTO> findByUserId(String userId) async {
     final token = await _getToken();
 
     final res = await http.get(
@@ -47,14 +46,14 @@ class AdminService {
     );
 
     if (res.statusCode == 200) {
-      return Admin.fromJson(jsonDecode(res.body));
+      return AdminDTO.fromJson(jsonDecode(res.body));
     }
 
     throw Exception(res.body);
   }
 
   // ================= FIND BY SPECIALITY =================
-  Future<List<Admin>> findBySpeciality(String speciality) async {
+  Future<List<AdminDTO>> findBySpeciality(String speciality) async {
     final token = await _getToken();
 
     final res = await http.get(
@@ -67,14 +66,72 @@ class AdminService {
 
     if (res.statusCode == 200) {
       List list = jsonDecode(res.body);
-      return list.map((e) => Admin.fromJson(e)).toList();
+      return list.map((e) => AdminDTO.fromJson(e)).toList();
     }
 
     throw Exception(res.body);
   }
 
-  // ================= ❌ DELETE ADMIN =================
-  Future<void> deleteAdmin(String adminId, String userId) async {
+  // ================= ADD ADMIN =================
+  Future<Map<String, dynamic>> addAdmin(Map<String, dynamic> adminData, String userId) async {
+    final token = await _getToken();
+
+    final res = await http.post(
+      Uri.parse("$baseUrl/add/$userId"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+      body: jsonEncode(adminData),
+    );
+
+    if (res.statusCode == 201) {
+      return {
+        'success': true,
+        'data': jsonDecode(res.body),
+        'message': 'Admin added successfully'
+      };
+    }
+
+    return {
+      'success': false,
+      'message': res.body,
+    };
+  }
+
+  // ================= UPDATE ADMIN =================
+  Future<Map<String, dynamic>> updateAdmin(
+    Map<String, dynamic> adminData,
+    String adminId,
+    String userId,
+  ) async {
+    final token = await _getToken();
+
+    final res = await http.put(
+      Uri.parse("$baseUrl/update/$adminId/$userId"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+      body: jsonEncode(adminData),
+    );
+
+    if (res.statusCode == 200) {
+      return {
+        'success': true,
+        'data': jsonDecode(res.body),
+        'message': 'Admin updated successfully'
+      };
+    }
+
+    return {
+      'success': false,
+      'message': res.body,
+    };
+  }
+
+  // ================= DELETE ADMIN =================
+  Future<Map<String, dynamic>> deleteAdmin(String adminId, String userId) async {
     final token = await _getToken();
 
     final res = await http.delete(
@@ -85,8 +142,32 @@ class AdminService {
       },
     );
 
-    if (res.statusCode != 200) {
-      throw Exception(res.body);
+    if (res.statusCode == 200) {
+      return {
+        'success': true,
+        'message': jsonDecode(res.body),
+      };
+    }
+
+    return {
+      'success': false,
+      'message': res.body,
+    };
+  }
+
+  // ================= HELPER: Get Admin Full Name =================
+  Future<String> getAdminName(String adminId) async {
+    try {
+      // If you have a method to get admin by ID, use it here
+      // For now, we'll fetch all admins and find by ID
+      final admins = await getAll();
+      final admin = admins.firstWhere(
+        (a) => a.id == adminId,
+        orElse: () => throw Exception('Admin not found'),
+      );
+      return admin.userName;
+    } catch (e) {
+      return "Unknown Admin";
     }
   }
 }

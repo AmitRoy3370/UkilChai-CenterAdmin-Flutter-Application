@@ -93,7 +93,7 @@ class ProfileMenuPage extends StatelessWidget {
       userId = value!;
     });
 
-    var url = Uri.parse("${BASEURL.Urls().baseURL}user/delete/$userId");
+    var url = Uri.parse("${BASEURL.Urls().baseURL}user/delete/$userId?tryingToDelete=$userId");
 
     var response = await http.delete(
       url,

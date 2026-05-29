@@ -233,7 +233,7 @@ class AdvocateJoinRequestDetailsState
     final userId = widget.advocateDetailsModel.userId;
 
     final response = await http.get(
-      Uri.parse("${baseURL.Urls().baseURL}advocate/cv/$userId"),
+      Uri.parse("${baseURL.Urls().baseURL}advocateJoinRequest/cv/$userId"),
       headers: {"Authorization": "Bearer $token"},
     );
 

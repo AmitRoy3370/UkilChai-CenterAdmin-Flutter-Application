@@ -1,16 +1,18 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../Auth/AuthService.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
-import './Admin.dart';
-import './AdvocateSpeciality.dart';
+import 'AdminDTO.dart';
+import '../Utils/AdvocateSpeciality.dart';
+import '../ChatRelatedPages/chat_screen.dart';
 
 class AdminDetailsPage extends StatefulWidget {
-  final Admin admin;
+  final AdminDTO admin;
 
   const AdminDetailsPage({super.key, required this.admin});
 
@@ -20,9 +22,6 @@ class AdminDetailsPage extends StatefulWidget {
 
 class _AdminDetailsPageState extends State<AdminDetailsPage> {
   Map<String, dynamic>? user;
-  Map<String, dynamic>? contactInfo;
-  Map<String, dynamic>? location;
-
   bool isHisAdmin = false;
   bool loading = true;
   Uint8List? imageBytes;
@@ -54,12 +53,11 @@ class _AdminDetailsPageState extends State<AdminDetailsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Admin deleted successfully")),
       );
-
-      Navigator.pop(context);
+      Navigator.pop(context, true);
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Failed to delete admin")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Failed to delete admin")),
+      );
     }
   }
 
@@ -83,8 +81,9 @@ class _AdminDetailsPageState extends State<AdminDetailsPage> {
 
     if (centerAdminResponse.statusCode == 200) {
       final centerAdminData = jsonDecode(centerAdminResponse.body);
-
-      if (centerAdminData["admins"].contains(widget.admin.id)) {
+      
+      if (centerAdminData["admins"] != null && 
+          centerAdminData["admins"].contains(widget.admin.id)) {
         isHisAdmin = true;
       } else {
         isHisAdmin = false;
@@ -92,9 +91,10 @@ class _AdminDetailsPageState extends State<AdminDetailsPage> {
     } else {
       isHisAdmin = false;
     }
+    
+    if (mounted) setState(() {});
   }
 
-  // ================= LOAD PROFILE IMAGE =================
   Future<void> loadProfileImage(String profileImageId) async {
     try {
       final token = await AuthService.getToken();
@@ -108,21 +108,25 @@ class _AdminDetailsPageState extends State<AdminDetailsPage> {
       );
 
       if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
-        setState(() => imageBytes = response.bodyBytes);
+        if (mounted) {
+          setState(() => imageBytes = response.bodyBytes);
+        }
       }
     } catch (e) {
       debugPrint("Image load error: $e");
     }
   }
 
-  // ================= FETCH ALL DETAILS =================
   Future<void> fetchAllDetails() async {
     setState(() => loading = true);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString("jwt_token") ?? "";
 
     try {
-      // 1️⃣ USER INFO
+      if (widget.admin.profileImageId != null && widget.admin.profileImageId!.isNotEmpty) {
+        await loadProfileImage(widget.admin.profileImageId!);
+      }
+
       final userRes = await http.get(
         Uri.parse(
           "${BASE_URL.Urls().baseURL}user/search?userId=${widget.admin.userId}",
@@ -135,171 +139,488 @@ class _AdminDetailsPageState extends State<AdminDetailsPage> {
 
       if (userRes.statusCode == 200) {
         user = jsonDecode(userRes.body);
-
-        final profileImageId = user?["profileImageId"];
-        if (profileImageId != null && profileImageId.toString().isNotEmpty) {
-          await loadProfileImage(profileImageId.toString());
-        }
-      }
-
-      // 2️⃣ CONTACT INFO (SINGLE OBJECT)
-      final contactRes = await http.get(
-        Uri.parse(
-          "${BASE_URL.Urls().baseURL}user/contact-info/user?userId=${widget.admin.userId}",
-        ),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-      );
-
-      if (contactRes.statusCode == 200 && contactRes.body.isNotEmpty) {
-        contactInfo = jsonDecode(contactRes.body);
-      }
-
-      // 3️⃣ LOCATION (SINGLE OBJECT)
-      final locRes = await http.get(
-        Uri.parse(
-          "${BASE_URL.Urls().baseURL}userLocation/findByUserId/${widget.admin.userId}",
-        ),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-      );
-
-      if (locRes.statusCode == 200 && locRes.body.isNotEmpty) {
-        location = jsonDecode(locRes.body);
       }
     } catch (e) {
       debugPrint("Error fetching details: $e");
     }
 
-    setState(() => loading = false);
+    if (mounted) setState(() => loading = false);
   }
 
-  // ================= UI =================
+  void _startChat() async {
+    // TODO: Implement chat functionality
+    // You can navigate to a chat page with this admin
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Starting chat with ${widget.admin.userName}..."),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+   
+    final userId = await _getUserId();
+    final userName = await getName(userId);
+
+    final otherUserId = widget.admin.userId;
+    final otherUserName = widget.admin.userName;
+
+    Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            otherUser: otherUserId,
+            othersName: otherUserName,
+            myName: userName,
+            currentUser: userId,
+          ),
+        ),
+      );
+
+  }
+  
+  Future<String> _getUserId() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString("userId") ?? "";
+  }
+
+  Future<String?> getName(String userId) async {
+
+    print("userId in getName :- $userId");
+
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String token = prefs.getString("jwt_token") ?? "";
+
+
+    final nameResponse = await http.get(
+      Uri.parse("${BASE_URL.Urls().baseURL}user/search?userId=$userId"),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer $token",
+      },
+    );
+
+    print("name status :- ${nameResponse.statusCode}");
+
+    if (nameResponse.statusCode == 200) {
+      final name = jsonDecode(nameResponse.body)["name"];
+
+      print("name :- $name");
+
+      return name;
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Admin Details")),
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        title: Text(
+          "Admin Details",
+          style: GoogleFonts.poppins(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: const Color(0xFF1A237E),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ===== USER INFO =====
-                  Text(
-                    "User Info",
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundImage: imageBytes != null
-                            ? MemoryImage(imageBytes!)
-                            : null,
-                        child: imageBytes == null
-                            ? const Icon(Icons.person, size: 40)
-                            : null,
+                  // ===== PROFILE HEADER CARD =====
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF1A237E), Color(0xFF283593)],
                       ),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF1A237E).withOpacity(0.3),
+                          blurRadius: 15,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Row(
                         children: [
-                          Text("Name: ${user?["name"] ?? "N/A"}"),
-                          Text("User ID: ${widget.admin.userId}"),
+                          CircleAvatar(
+                            radius: 45,
+                            backgroundImage: imageBytes != null
+                                ? MemoryImage(imageBytes!)
+                                : null,
+                            backgroundColor: Colors.white.withOpacity(0.2),
+                            child: imageBytes == null
+                                ? Text(
+                                    widget.admin.userName.isNotEmpty
+                                        ? widget.admin.userName[0].toUpperCase()
+                                        : "A",
+                                    style: const TextStyle(
+                                      fontSize: 40,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.admin.userName,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    "Admin ID: ${widget.admin.id.substring(0, 8)}...",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    "User ID: ${widget.admin.userId.substring(0, 8)}...",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      color: Colors.white60,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
+                  const SizedBox(height: 20),
 
-                  const Divider(height: 24),
-
-                  // ===== SPECIALITIES =====
-                  Text(
-                    "Specialities",
-                    style: Theme.of(context).textTheme.titleMedium,
+                  // ===== ADMIN INFORMATION CARD =====
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.deepPurple.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(Icons.admin_panel_settings, color: Colors.deepPurple.shade600, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                "Admin Information",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.deepPurple.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          _buildInfoRow(
+                            icon: Icons.badge,
+                            label: "Admin Name",
+                            value: widget.admin.userName,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoRow(
+                            icon: Icons.qr_code,
+                            label: "Admin ID",
+                            value: widget.admin.id,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoRow(
+                            icon: Icons.person,
+                            label: "User ID",
+                            value: widget.admin.userId,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoRow(
+                            icon: Icons.image,
+                            label: "Profile Image ID",
+                            value: widget.admin.profileImageId ?? "Not provided",
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: widget.admin.advocateSpeciality
-                        .map((e) => Chip(label: Text(specialityLabel(e))))
-                        .toList(),
-                  ),
+                  const SizedBox(height: 20),
 
-                  const Divider(height: 24),
-
-                  // ===== CONTACT INFO =====
-                  Text(
-                    "Contact Info",
-                    style: Theme.of(context).textTheme.titleMedium,
+                  // ===== SPECIALITIES CARD =====
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.deepPurple.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(Icons.star, color: Colors.deepPurple.shade600, size: 22),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                "Legal Specialities",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.deepPurple.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          if (widget.admin.advocateSpeciality.isEmpty)
+                            Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Text(
+                                  "No specialities assigned",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: widget.admin.advocateSpeciality
+                                  .map((e) => Chip(
+                                        label: Text(
+                                          e.label,
+                                          style: GoogleFonts.inter(fontSize: 12),
+                                        ),
+                                        backgroundColor: Colors.deepPurple.shade50,
+                                        labelStyle: TextStyle(color: Colors.deepPurple.shade700),
+                                        avatar: Icon(e.icon, size: 16, color: Colors.deepPurple.shade600),
+                                      ))
+                                  .toList(),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  contactInfo != null
-                      ? Column(
+                  const SizedBox(height: 20),
+
+                  // ===== USER DETAILS CARD (from User API) =====
+                  if (user != null)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("Email: ${contactInfo!["email"] ?? "N/A"}"),
-                            Text("Phone: ${contactInfo!["phone"] ?? "N/A"}"),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.deepPurple.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(Icons.person_outline, color: Colors.deepPurple.shade600, size: 22),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  "User Account Details",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.deepPurple.shade700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            _buildInfoRow(
+                              icon: Icons.badge,
+                              label: "Full Name",
+                              value: user?["name"] ?? "Not provided",
+                            ),
+                            if (user?["email"] != null) ...[
+                              const SizedBox(height: 12),
+                              _buildInfoRow(
+                                icon: Icons.email,
+                                label: "Email",
+                                value: user?["email"] ?? "Not provided",
+                              ),
+                            ],
+                            if (user?["phone"] != null) ...[
+                              const SizedBox(height: 12),
+                              _buildInfoRow(
+                                icon: Icons.phone,
+                                label: "Phone",
+                                value: user?["phone"] ?? "Not provided",
+                              ),
+                            ],
                           ],
-                        )
-                      : const Text("No contact info found"),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 20),
 
-                  const Divider(height: 24),
-
-                  // ===== LOCATION =====
-                  Text(
-                    "Location",
-                    style: Theme.of(context).textTheme.titleMedium,
+                  // ===== CHAT BUTTON =====
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.chat_bubble_outline),
+                      label: Text(
+                        "Chat with ${widget.admin.userName.split(' ')[0]}",
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.deepPurple.shade600,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 2,
+                      ),
+                      onPressed: _startChat,
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  location != null
-                      ? ListTile(
-                          title: Text(location!["locationName"] ?? "No name"),
-                          subtitle: Text(
-                            "Lat: ${location!["lattitude"]}, Long: ${location!["longitude"]}",
-                          ),
-                        )
-                      : const Text("No location found"),
-                  const Divider(height: 32),
+                  const SizedBox(height: 12),
 
+                  // ===== DELETE BUTTON =====
                   if (isHisAdmin)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        icon: const Icon(Icons.delete),
-                        label: const Text("Delete Admin"),
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text(
+                          "Delete Admin",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
+                          backgroundColor: Colors.red.shade600,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 2,
                         ),
                         onPressed: () async {
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (context) => AlertDialog(
-                              title: const Text("Confirm Delete"),
-                              content: const Text(
+                              backgroundColor: Colors.grey.shade900,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              title: Text(
+                                "Confirm Delete",
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              content: Text(
                                 "Are you sure you want to delete this admin? This action cannot be undone.",
+                                style: GoogleFonts.inter(color: Colors.grey.shade300),
                               ),
                               actions: [
                                 TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(context, false),
-                                  child: const Text("Cancel"),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  child: const Text(
-                                    "Delete",
-                                    style: TextStyle(color: Colors.red),
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: Text(
+                                    "Cancel",
+                                    style: GoogleFonts.inter(color: Colors.grey.shade400),
                                   ),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red.shade700,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text("Delete"),
                                 ),
                               ],
                             ),
@@ -311,9 +632,54 @@ class _AdminDetailsPageState extends State<AdminDetailsPage> {
                         },
                       ),
                     ),
+                  const SizedBox(height: 20),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.deepPurple.shade50,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: Colors.deepPurple.shade600),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  fontSize: 11,
+                  color: Colors.grey.shade500,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

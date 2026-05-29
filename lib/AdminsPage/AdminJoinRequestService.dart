@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Auth/AuthService.dart';
 import './AdminJoinRequest.dart';
+import './AdminJoinRequestDTO.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
 
 class AdminJoinRequestService {
@@ -12,7 +13,7 @@ class AdminJoinRequestService {
   final token = AuthService.getToken();
 
   // ---------- GET ALL ----------
-  Future<List<AdminJoinRequest>> getAll() async {
+  Future<List<AdminJoinRequestDTO>> getAll() async {
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String token = prefs.getString("jwt_token") ?? "";
@@ -33,13 +34,13 @@ class AdminJoinRequestService {
 
       print("list : ${list.length}");
 
-      return list.map((e) => AdminJoinRequest.fromJson(e)).toList();
+      return list.map((e) => AdminJoinRequestDTO.fromJson(e)).toList();
     }
     throw Exception(res.body);
   }
 
   // ---------- FIND BY USER ID ----------
-  Future<AdminJoinRequest> findByUserId(String userName) async {
+  Future<AdminJoinRequestDTO> findByUserId(String userName) async {
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String token = prefs.getString("jwt_token") ?? "";
@@ -72,13 +73,13 @@ class AdminJoinRequestService {
     );
 
     if (res.statusCode == 200) {
-      return AdminJoinRequest.fromJson(jsonDecode(res.body));
+      return AdminJoinRequestDTO.fromJson(jsonDecode(res.body));
     }
     throw Exception(res.body);
   }
 
   // ---------- SEARCH BY SPECIALITY ----------
-  Future<List<AdminJoinRequest>> searchBySpeciality(
+  Future<List<AdminJoinRequestDTO>> searchBySpeciality(
       String speciality) async {
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -95,12 +96,12 @@ class AdminJoinRequestService {
 
     if (res.statusCode == 200) {
       List list = jsonDecode(res.body);
-      return list.map((e) => AdminJoinRequest.fromJson(e)).toList();
+      return list.map((e) => AdminJoinRequestDTO.fromJson(e)).toList();
     }
     throw Exception(res.body);
   }
 
-  // ---------- HANDLE JOIN REQUEST ----------
+  // ---------- HANDLE JOIN REQUEST (FIXED) ----------
   Future<void> handleJoinRequest(
       String adminJoinRequestId,
       String userId,
@@ -109,6 +110,11 @@ class AdminJoinRequestService {
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String token = prefs.getString("jwt_token") ?? "";
+
+    print("Sending request to: $baseUrl/handle/$adminJoinRequestId/$userId/$response");
+    print("AdminJoinRequestId: $adminJoinRequestId");
+    print("UserId: $userId");
+    print("Response: $response");
 
     final res = await http.post(
       Uri.parse(
@@ -119,6 +125,9 @@ class AdminJoinRequestService {
         "Authorization": "Bearer $token",
       },
     );
+
+    print("Response status code: ${res.statusCode}");
+    print("Response body: ${res.body}");
 
     if (res.statusCode != 200) {
       throw Exception(res.body);

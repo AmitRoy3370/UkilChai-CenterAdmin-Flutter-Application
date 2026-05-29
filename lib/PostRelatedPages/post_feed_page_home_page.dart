@@ -1,5 +1,5 @@
-import '../PostRelatedPages/post_card_home_page.dart';
-import '../PostRelatedPages/post_response.dart';
+import 'package:advocatechaicenteradmin/PostRelatedPages/post_card_home_page.dart';
+import 'package:advocatechaicenteradmin/PostRelatedPages/post_response.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import './AdvocatePost.dart';

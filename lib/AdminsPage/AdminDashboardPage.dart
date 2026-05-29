@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import './AdminListPage.dart';
+import '../ChatRelatedPages/chat_screen.dart';
 import 'SeeAllAdminJoinRequest.dart';
 
 class AdminDashboardPage extends StatefulWidget {
@@ -33,7 +34,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(titles[currentIndex]),
       ),
