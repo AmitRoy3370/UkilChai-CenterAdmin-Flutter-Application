@@ -17,6 +17,7 @@ class AdvocateJoinRequestModel {
   List<dynamic> advocateSpeciality;
   List<dynamic> degrees;
   List<dynamic> workingExperiences;
+  String? district;
 
   AdvocateJoinRequestModel(
       this.id,
@@ -34,6 +35,7 @@ class AdvocateJoinRequestModel {
       this.degrees,
       this.workingExperiences,
       this.userId,
+      this.district,
       );
 
   AdvocateJoinRequestModel.defaultConstructor()
@@ -67,6 +69,7 @@ class AdvocateJoinRequestModel {
           ? List.from(json['workingExperiences'])
           : [],
       json['userId'],
+      json['district'] != null ? json['district'] : 'none',
     );
   }
 }

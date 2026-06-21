@@ -24,6 +24,7 @@ class AdvocateDetailsModel {
 
   double? lattitude;
   double? longitude;
+  String? district;
 
   AdvocateDetailsModel(
       this.id,
@@ -43,6 +44,7 @@ class AdvocateDetailsModel {
       this.locationName,
       this.lattitude,
       this.longitude,
+      this.district,
       );
 
   AdvocateDetailsModel.defaultConstructor()
@@ -92,6 +94,7 @@ class AdvocateDetailsModel {
       json['longitude'] != null
           ? double.tryParse(json['longitude'].toString())
           : null,
+      json['district'] != null ? json['district'] : 'none',
     );
   }
 }

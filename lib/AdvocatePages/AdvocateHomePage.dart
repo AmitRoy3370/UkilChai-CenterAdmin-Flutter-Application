@@ -1,93 +1,214 @@
+// lib/AdvocatePages/advocate_home_page_pageview.dart
 import 'dart:convert';
-import 'package:advocatechaicenteradmin/AdvocatePages/AdvocateFilterPage.dart';
-import 'package:advocatechaicenteradmin/AdvocatePages/advocate_join_request_filter_pages.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
+import '../AdvocatePages/AdvocateFilterPage.dart';
+import '../AdvocatePages/advocate_join_request_filter_pages.dart';
+import '../LiveLocations/live_location_screen.dart';
+import '../LiveLocations/live_location_provider.dart';
 import '../Auth/AuthService.dart';
-
-import '../ChatRelatedPages/user_active_service.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
-import '../Utils/AdvocateSpeciality.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 
-class AdvocateHomePage extends StatefulWidget {
+
+class AdvocateHomePage extends StatelessWidget {
   const AdvocateHomePage({super.key});
 
   @override
-  State<AdvocateHomePage> createState() => _AdvocateHomePage();
+  Widget build(BuildContext context) {
+    // ✅ এখানে Provider তৈরি করুন
+    return ChangeNotifierProvider(
+      create: (_) => LiveLocationProvider(),
+      child: const _AdvocateHomePageContent(),
+    );
+  }
 }
 
-class _AdvocateHomePage extends State<AdvocateHomePage> {
-  List<Widget> pages = [AdvocateFilterPage(), AdvocateJoinRequestFilterPage()];
-  int index = 0;
+class _AdvocateHomePageContent extends StatefulWidget {
+  const _AdvocateHomePageContent({super.key});
 
+  @override
+  State<_AdvocateHomePageContent> createState() => _AdvocateHomePageContentState();
+}
 
-  void setUserActive(bool active) async {
+class _AdvocateHomePageContentState extends State<_AdvocateHomePageContent> {
+  int _selectedIndex = 0;
+  String? userId;
+  String? userName;
+  bool _isLoading = true;
+  late PageController _pageController = PageController();
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+    getUserInfo();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> getUserInfo() async {
     try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? token = prefs.getString('jwt_token');
-      String? userId = prefs.getString('userId');
-      if (userId != null) {
+      final id = await AuthService.getUserId();
+      
+      if (id != null && id.isNotEmpty) {
+        String? token = await AuthService.getToken();
+        
         final response = await http.get(
-          Uri.parse("${BASE_URL.Urls().baseURL}user-active/user/$userId"),
+          Uri.parse('${BASE_URL.Urls().baseURL}user/search?userId=$id'),
           headers: {
-            'content-type': 'application/json',
+            'Content-Type': 'application/json',
             'Authorization': 'Bearer $token',
           },
         );
 
         if (response.statusCode == 200) {
-          final body = jsonDecode(response.body);
-
-          await UserActiveService.updateUserActive(
-            body["id"],
-            userId,
-            active,
-            token,
-          );
+          final data = jsonDecode(response.body);
+          setState(() {
+            userId = data['id'] ?? id;
+            userName = data['name'] ?? 'User';
+            _isLoading = false;
+          });
         } else {
-          await UserActiveService.addUserActive(userId, active, token);
+          setState(() {
+            userId = id;
+            userName = 'User';
+            _isLoading = false;
+          });
         }
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      print(e);
+      print('❌ Error getting user info: $e');
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+      // ✅ hasClients চেক করুন
+      if (_pageController.hasClients) {
+        _pageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    // ✅ এখন Provider পাওয়া যাবে
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: Text(
-          "Advocate Home Page",
-          style: TextStyle(
-            fontSize: 20,
+          _selectedIndex == 0 ? "Find Advocate" : "Live Location",
+          style: const TextStyle(
+            fontSize: 22,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: Colors.black87,
           ),
         ),
-        backgroundColor: Colors.green,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          if (_selectedIndex == 1)
+            Consumer<LiveLocationProvider>(
+              builder: (context, locationProvider, child) {
+                return IconButton(
+                  icon: const Icon(Icons.refresh, color: Colors.grey),
+                  onPressed: () {
+                    locationProvider.refreshLocations();
+                  },
+                );
+              },
+            ),
+        ],
       ),
-      body: pages[index],
+      body: _isLoading
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Colors.purple),
+                  SizedBox(height: 16),
+                  Text('Loading...', style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            )
+          : PageView(
+              controller: _pageController,
+              onPageChanged: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
+              children: [
+                // Tab 0: Advocate Filter
+                const AdvocateFilterPage(),
+                const AdvocateJoinRequestFilterPage(),
+                // Tab 1: Live Location
+                if (userId != null && userId!.isNotEmpty)
+                  LiveLocationScreen(
+                    userId: userId!,
+                    advocateId: null,
+                    userName: userName ?? 'User',
+                  )
+                else
+                  const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.location_off, size: 80, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text(
+                          'Please login to see live location',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
       bottomNavigationBar: BottomNavigationBar(
-        items: [
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Colors.purple,
+        unselectedItemColor: Colors.grey,
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
+        elevation: 8,
+        items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: " All Advocate",
+            icon: Icon(Icons.people),
+            label: 'Advocates',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: " Advocate request",
+            icon: Icon(Icons.people),
+            label: 'Advocates join request',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.location_on),
+            label: 'Live Location',
           ),
         ],
-        currentIndex: index,
-        onTap: (value) {
-          setState(() {
-            index = value;
-          });
-        },
       ),
     );
   }

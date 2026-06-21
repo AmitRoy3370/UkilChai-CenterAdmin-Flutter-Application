@@ -107,7 +107,7 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
         final String userId = advocateDecoded["userId"];
 
         // ---------- USER ----------
-        final userRes = await http.get(
+        /*final userRes = await http.get(
           Uri.parse("${BASE_URL.Urls().baseURL}user/search?userId=$userId"),
           headers: {"Authorization": "Bearer $token"},
         );
@@ -115,56 +115,56 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
         print("user response for ${getNameFromUser(userId)} is ${userRes.statusCode}");
 
         if (userRes.statusCode != 200) continue;
-        final user = jsonDecode(userRes.body);
+        final user = jsonDecode(userRes.body);*/
 
         // ---------- CONTACT ----------
         String? email;
         String? phone;
 
-        final contactRes = await http.get(
+        /*final contactRes = await http.get(
           Uri.parse(
             "${BASE_URL.Urls().baseURL}user/contact-info/user?userId=$userId",
           ),
           headers: {"Authorization": "Bearer $token"},
         );
 
-        print("Contact response for ${getNameFromUser(userId)} is ${contactRes.statusCode}");
+        print("Contact response for ${getNameFromUser(userId)} is ${contactRes.statusCode}");*/
 
 
-        if (contactRes.statusCode == 200) {
-          final contact = jsonDecode(contactRes.body);
-          email = contact["email"];
-          phone = contact["phone"];
-        }
+        //if (contactRes.statusCode == 200) {
+          //final contact = jsonDecode(contactRes.body);
+          email = advocateDecoded["email"];
+          phone = advocateDecoded["phone"];
+        //}
 
         // ---------- LOCATION ----------
         String? locationName;
         double? lat;
         double? lng;
 
-        final locationRes = await http.get(
+        /*final locationRes = await http.get(
           Uri.parse(
             "${BASE_URL.Urls().baseURL}userLocation/findByUserId/$userId",
           ),
           headers: {"Authorization": "Bearer $token"},
         );
 
-        print("location response for ${getNameFromUser(userId)} is ${locationRes.statusCode}");
+        print("location response for ${getNameFromUser(userId)} is ${locationRes.statusCode}");*/
 
 
-        if (locationRes.statusCode == 200) {
-          final location = jsonDecode(locationRes.body);
-          locationName = location["locationName"];
-          lat = location["lattitude"];
-          lng = location["longitude"];
-        }
+        //if (locationRes.statusCode == 200) {
+          //final location = jsonDecode(locationRes.body);
+          locationName = advocateDecoded["locationName"];
+          lat = advocateDecoded["lattitude"];
+          lng = advocateDecoded["longitude"];
+        //}
 
         // ---------- BUILD MODEL ----------
         final model = AdvocateJoinRequestModel.defaultConstructor()
           ..id = advocateDecoded["id"]
           ..userId = userId
-          ..name = user["name"]
-          ..profileImageId = user["profileImageId"]
+          ..name = advocateDecoded["userName"]
+          ..profileImageId = advocateDecoded["profileImageId"]
           ..experience = advocateDecoded["experience"]
           ..licenseKey = advocateDecoded["licenseKey"]
           ..advocateSpeciality = advocateDecoded["advocateSpeciality"] ?? []
@@ -174,7 +174,8 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
           ..phone = phone
           ..locationName = locationName
           ..lattitude = lat
-          ..longitude = lng;
+          ..longitude = lng
+          ..district = advocateDecoded['district'];
 
         list.add(model);
       }
@@ -204,6 +205,10 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
       },
     );
 
+    print('find for the speciality :- ${speciality.name}');
+
+    print('status code of searching with speiality :- ${response.statusCode}');
+
     if (response.statusCode == 200) {
       final List responseData = jsonDecode(response.body);
 
@@ -214,7 +219,7 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
         final String userId = advocateDecoded["userId"];
 
         // ---------- USER ----------
-        final userRes = await http.get(
+        /*final userRes = await http.get(
           Uri.parse("${BASE_URL.Urls().baseURL}user/search?userId=$userId"),
           headers: {"Authorization": "Bearer $token"},
         );
@@ -222,56 +227,56 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
         print("user response for ${getNameFromUser(userId)} is ${userRes.statusCode}");
 
         if (userRes.statusCode != 200) continue;
-        final user = jsonDecode(userRes.body);
+        final user = jsonDecode(userRes.body);*/
 
         // ---------- CONTACT ----------
         String? email;
         String? phone;
 
-        final contactRes = await http.get(
+        /*final contactRes = await http.get(
           Uri.parse(
             "${BASE_URL.Urls().baseURL}user/contact-info/user?userId=$userId",
           ),
           headers: {"Authorization": "Bearer $token"},
         );
 
-        print("Contact response for ${getNameFromUser(userId)} is ${contactRes.statusCode}");
+        print("Contact response for ${getNameFromUser(userId)} is ${contactRes.statusCode}");*/
 
 
-        if (contactRes.statusCode == 200) {
-          final contact = jsonDecode(contactRes.body);
-          email = contact["email"];
-          phone = contact["phone"];
-        }
+        //if (contactRes.statusCode == 200) {
+          //final contact = jsonDecode(contactRes.body);
+          email = advocateDecoded["email"];
+          phone = advocateDecoded["phone"];
+        //}
 
         // ---------- LOCATION ----------
         String? locationName;
         double? lat;
         double? lng;
 
-        final locationRes = await http.get(
+        /*final locationRes = await http.get(
           Uri.parse(
             "${BASE_URL.Urls().baseURL}userLocation/findByUserId/$userId",
           ),
           headers: {"Authorization": "Bearer $token"},
         );
 
-        print("location response for ${getNameFromUser(userId)} is ${locationRes.statusCode}");
+        print("location response for ${getNameFromUser(userId)} is ${locationRes.statusCode}");*/
 
 
-        if (locationRes.statusCode == 200) {
-          final location = jsonDecode(locationRes.body);
-          locationName = location["locationName"];
-          lat = location["lattitude"];
-          lng = location["longitude"];
-        }
+        //if (locationRes.statusCode == 200) {
+          //final location = jsonDecode(locationRes.body);
+          locationName = advocateDecoded["locationName"];
+          lat = advocateDecoded["lattitude"];
+          lng = advocateDecoded["longitude"];
+        //}
 
         // ---------- BUILD MODEL ----------
         final model = AdvocateJoinRequestModel.defaultConstructor()
           ..id = advocateDecoded["id"]
           ..userId = userId
-          ..name = user["name"]
-          ..profileImageId = user["profileImageId"]
+          ..name = advocateDecoded["userName"]
+          ..profileImageId = advocateDecoded["profileImageId"]
           ..experience = advocateDecoded["experience"]
           ..licenseKey = advocateDecoded["licenseKey"]
           ..advocateSpeciality = advocateDecoded["advocateSpeciality"] ?? []
@@ -281,14 +286,16 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
           ..phone = phone
           ..locationName = locationName
           ..lattitude = lat
-          ..longitude = lng;
+          ..longitude = lng
+          ..district = advocateDecoded['district'];
 
-        models.add(model);
+        list.add(model);
       }
       setState(() {
-        list = /*body.map((e) => AdvocateDetailsModel.fromJson(e)).toList()*/ models;
+        //list = /*body.map((e) => AdvocateDetailsModel.fromJson(e)).toList()*/ models;
         loading = false;
       });
+
     } else {
       setState(() {
         loading = false;

@@ -162,7 +162,8 @@ class AdvocateList extends StatelessWidget {
       // ❗ ALSO FIX THIS (WRONG KEY)
         ..contactInfoId = advocateDecoded['contactInfoId']?.toString()
         ..locationId = advocateDecoded['locationId']?.toString()
-        ..cvHexKey = advocateDecoded['cvHexKey']?.toString();
+        ..cvHexKey = advocateDecoded['cvHexKey']?.toString()
+        ..district = advocateDecoded['district'];
 
       print("advocate model :- $model");
 
@@ -357,7 +358,12 @@ class AdvocateList extends StatelessWidget {
                                   "License: ${advocate.licenseKey}",
                                 ),
                               ]),
-
+                              _section("District", [
+                                _row(
+                                  Icons.badge,
+                                  "District: ${advocate.district}",
+                                ),
+                              ]),
                               _listSection(
                                 "Specialities",
                                 (advocate.advocateSpeciality ?? [])
