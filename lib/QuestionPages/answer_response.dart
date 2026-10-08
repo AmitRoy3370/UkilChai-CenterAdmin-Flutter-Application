@@ -6,6 +6,7 @@ class AnswerResponse {
   final String id;
   final String advocateId;
   final String advocateName;
+  final String? advocateFullName;
   final String message;
   final DateTime time;
   final String questionId;
@@ -15,33 +16,41 @@ class AnswerResponse {
     required this.id,
     required this.advocateId,
     required this.advocateName,
+    required this.advocateFullName,
     required this.message,
     required this.time,
     required this.questionId,
     this.attachmentId,
   });
 
-  // From JSON Factory Constructor
+  // ────────────────────────────────────────────────────────────────────────
+  // fromJson
+  // ────────────────────────────────────────────────────────────────────────
   factory AnswerResponse.fromJson(Map<String, dynamic> json) {
     return AnswerResponse(
-      id: json['id'] ?? '',
-      advocateId: json['advocateId'] ?? '',
-      advocateName: json['advocateName'] ?? '',
-      message: json['message'] ?? '',
+      id: json['id']?.toString() ?? '',
+      advocateId: (json['advocateId'] ?? json['advocate'] ?? '').toString(),
+      advocateName: json['advocateName']?.toString() ?? '',
+      advocateFullName: json['advocateFullName']?.toString(),
+      message: json['message']?.toString() ?? '',
       time: json['time'] != null
-          ? DateTime.parse(json['time']).toLocal()
+          ? DateTime.tryParse(json['time'].toString())?.toLocal() ??
+              DateTime.now()
           : DateTime.now(),
-      questionId: json['questionId'] ?? '',
-      attachmentId: json['attachmentId'],
+      questionId: json['questionId']?.toString() ?? '',
+      attachmentId: json['attachmentId']?.toString(),
     );
   }
 
-  // To JSON Method
+  // ────────────────────────────────────────────────────────────────────────
+  // toJson
+  // ────────────────────────────────────────────────────────────────────────
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'advocateId': advocateId,
       'advocateName': advocateName,
+      'advocateFullName': advocateFullName,
       'message': message,
       'time': time.toUtc().toIso8601String(),
       'questionId': questionId,
@@ -49,11 +58,14 @@ class AnswerResponse {
     };
   }
 
-  // Copy With Method (State Update এর জন্য)
+  // ────────────────────────────────────────────────────────────────────────
+  // copyWith
+  // ────────────────────────────────────────────────────────────────────────
   AnswerResponse copyWith({
     String? id,
     String? advocateId,
     String? advocateName,
+    String? advocateFullName,
     String? message,
     DateTime? time,
     String? questionId,
@@ -63,6 +75,7 @@ class AnswerResponse {
       id: id ?? this.id,
       advocateId: advocateId ?? this.advocateId,
       advocateName: advocateName ?? this.advocateName,
+      advocateFullName: advocateFullName ?? this.advocateFullName,
       message: message ?? this.message,
       time: time ?? this.time,
       questionId: questionId ?? this.questionId,
@@ -70,8 +83,28 @@ class AnswerResponse {
     );
   }
 
-  // Computed Properties
-  bool get hasAttachment => attachmentId != null && attachmentId!.isNotEmpty;
+  // ────────────────────────────────────────────────────────────────────────
+  // Computed properties
+  // ────────────────────────────────────────────────────────────────────────
+
+  /// True when an attachment id is present and not a placeholder.
+  bool get hasAttachment =>
+      attachmentId != null &&
+      attachmentId!.isNotEmpty &&
+      attachmentId != 'null' &&
+      attachmentId != 'attachmentId';
+
+  /// True when the answer was written by a known advocate.
+  /// Used by `AnswerTile._canDelete` to decide whether to show the
+  /// delete button for a center admin.
+  bool get hasAdvocateId => advocateId.isNotEmpty;
+
+  /// Safe accessor for the delete check — returns '' when there's no id.
+  String get advocateIdOrEmpty => advocateId;
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Time formatting helpers
+  // ────────────────────────────────────────────────────────────────────────
 
   String get formattedTime {
     final now = DateTime.now();
@@ -102,9 +135,13 @@ class AnswerResponse {
     return DateFormat('hh:mm a').format(time);
   }
 
+  // ────────────────────────────────────────────────────────────────────────
+  // Object overrides
+  // ────────────────────────────────────────────────────────────────────────
+
   @override
   String toString() {
-    return 'AnswerResponse(id: $id, advocateName: $advocateName, message: $message, time: $formattedTime)';
+    return 'AnswerResponse(id: $id, advocateId: $advocateId, advocateName: $advocateName, message: $message, time: $formattedTime)';
   }
 
   @override
@@ -114,6 +151,7 @@ class AnswerResponse {
         other.id == id &&
         other.advocateId == advocateId &&
         other.advocateName == advocateName &&
+        other.advocateFullName == advocateFullName &&
         other.message == message &&
         other.time == time &&
         other.questionId == questionId &&
@@ -122,6 +160,15 @@ class AnswerResponse {
 
   @override
   int get hashCode {
-    return Object.hash(id, advocateId, advocateName, message, time, questionId, attachmentId);
+    return Object.hash(
+      id,
+      advocateId,
+      advocateName,
+      advocateFullName,
+      message,
+      time,
+      questionId,
+      attachmentId,
+    );
   }
 }

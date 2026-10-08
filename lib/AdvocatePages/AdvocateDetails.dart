@@ -1,3 +1,5 @@
+// lib/AdvocatePages/AdvocateDetails.dart
+
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -25,6 +27,12 @@ import '../PostRelatedPages/post_card.dart';
 import '../PostRelatedPages/post_response.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
 
+// ✅ NEW: Bookmark service (same one used by the user panel)
+import 'BookmarkService.dart';
+
+// ✅ NEW: Google fonts (used by the bookmark button styling — optional but nice)
+import 'package:google_fonts/google_fonts.dart';
+
 class AdvocateDetails extends StatefulWidget {
   final AdvocateDetailsModel advocateDetailsModel;
 
@@ -43,6 +51,10 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
   int totalRatings = 0;
   int highestRating = 0;
 
+  // ✅ Bookmark state
+  bool _isBookmarked = false;
+  bool _bookmarkBusy = false;
+
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -51,7 +63,115 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
     fetchTotalCases();
     loadPosts();
     fetchRatings();
+    _loadBookmarkState(); // ✅ NEW
   }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ✅ BOOKMARK LOGIC (snapshot-based, per-user)
+  // ═══════════════════════════════════════════════════════════════════
+
+  /// Load current bookmark state for this advocate.
+  Future<void> _loadBookmarkState() async {
+    final id = widget.advocateDetailsModel.id ?? '';
+    if (id.isEmpty) return;
+
+    final me = await AuthService.getUserId();
+    BookmarkService.setCurrentUser(me);
+
+    final saved = await BookmarkService.isBookmarked(id);
+    if (!mounted) return;
+    setState(() => _isBookmarked = saved);
+  }
+
+  /// Toggle bookmark — saves a full snapshot (including profile image).
+  Future<void> _toggleBookmark() async {
+    if (_bookmarkBusy) return;
+
+    final model = widget.advocateDetailsModel;
+    final id = model.id ?? '';
+    if (id.isEmpty) return;
+
+    final me = await AuthService.getUserId();
+    BookmarkService.setCurrentUser(me);
+
+    setState(() => _bookmarkBusy = true);
+
+    try {
+      final currentlySaved = await BookmarkService.isBookmarked(id);
+
+      // ---- REMOVE ----
+      if (currentlySaved) {
+        await BookmarkService.remove(id);
+
+        if (!mounted) return;
+        setState(() {
+          _isBookmarked = false;
+          _bookmarkBusy = false;
+        });
+        _showSnack('Removed from bookmarks', false);
+        return;
+      }
+
+      // ---- ADD ----
+      Uint8List? imageBytes;
+      try {
+        imageBytes = await fetchProfileImage();
+      } catch (_) {}
+
+      final snapshot = SavedAdvocateSnapshot(
+        id: id,
+        userId: model.userId,
+        name: model.name,
+        fullName: model.fullName,
+        profileImageId: model.profileImageId,
+        advocateSpeciality:
+            model.advocateSpeciality.map((e) => e.toString()).toList(),
+        locationName: model.locationName,
+        district: model.district,
+        experience: model.experience,
+        profileImageBytes: imageBytes,
+      );
+
+      await BookmarkService.add(snapshot);
+
+      if (!mounted) return;
+      setState(() {
+        _isBookmarked = true;
+        _bookmarkBusy = false;
+      });
+      _showSnack('Saved to bookmarks', true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _bookmarkBusy = false);
+      _showSnack('Bookmark failed: $e', false);
+    }
+  }
+
+  void _showSnack(String msg, bool positive) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor:
+            positive ? Colors.green.shade600 : Colors.grey.shade700,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // EXISTING FETCH LOGIC
+  // ═══════════════════════════════════════════════════════════════════
 
   Future<void> fetchRatings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -289,6 +409,18 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
         title: const Text("Advocate Details"),
         backgroundColor: Colors.white70,
         centerTitle: true,
+        actions: [
+          // ✅ Bookmark icon in app bar
+          IconButton(
+            tooltip: _isBookmarked ? "Remove bookmark" : "Bookmark",
+            icon: Icon(
+              _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+              color:
+                  _isBookmarked ? Colors.red.shade400 : Colors.grey.shade700,
+            ),
+            onPressed: _bookmarkBusy ? null : _toggleBookmark,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -298,21 +430,52 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
             Center(
               child: Column(
                 children: [
-                  FutureBuilder<Uint8List?>(
-                    future: fetchProfileImage(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const CircleAvatar(
-                          radius: 55,
-                          child: Icon(Icons.person, size: 55),
-                        );
-                      }
+                  Stack(
+                    children: [
+                      FutureBuilder<Uint8List?>(
+                        future: fetchProfileImage(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const CircleAvatar(
+                              radius: 55,
+                              child: Icon(Icons.person, size: 55),
+                            );
+                          }
 
-                      return CircleAvatar(
-                        radius: 55,
-                        backgroundImage: MemoryImage(snapshot.data!),
-                      );
-                    },
+                          return CircleAvatar(
+                            radius: 55,
+                            backgroundImage: MemoryImage(snapshot.data!),
+                          );
+                        },
+                      ),
+
+                      // ✅ Floating bookmark button on the profile image
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Material(
+                          color: Colors.white,
+                          shape: const CircleBorder(),
+                          elevation: 3,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: _bookmarkBusy ? null : _toggleBookmark,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Icon(
+                                _isBookmarked
+                                    ? Icons.bookmark
+                                    : Icons.bookmark_border,
+                                color: _isBookmarked
+                                    ? Colors.red.shade400
+                                    : Colors.grey.shade700,
+                                size: 22,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 12),
@@ -406,7 +569,7 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
                       width: 300,
                       child: Card(
                         child: SingleChildScrollView(
-                          child: PostCard(post: posts[index], canReact: false,),
+                          child: PostCard(post: posts[index], canReact: false),
                         ),
                       ),
                     );
@@ -479,7 +642,8 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
                 ),
               ),
               onPressed: () async {
-                SharedPreferences prefs = await SharedPreferences.getInstance();
+                SharedPreferences prefs =
+                    await SharedPreferences.getInstance();
                 final token = prefs.getString('jwt_token') ?? '';
                 final userId = prefs.getString('userId') ?? '';
 
@@ -488,12 +652,13 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
                   NavigatorPageRoute.MaterialPageRoute(
                     builder: (context) => AddCaseRequestPage(
                       userId: userId,
-                      specialRequestedAdvocate: widget.advocateDetailsModel.id,
+                      specialRequestedAdvocate:
+                          widget.advocateDetailsModel.id,
                     ),
                   ),
                 );
               },
-              child: Text(
+              child: const Text(
                 "Send Case request",
                 style: TextStyle(
                   fontSize: 30,
@@ -503,6 +668,8 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
               ),
             ),
             const SizedBox(height: 20),
+
+            /// ================= CHAT BUTTON =================
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
@@ -512,7 +679,8 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
                 ),
               ),
               onPressed: () async {
-                SharedPreferences prefs = await SharedPreferences.getInstance();
+                SharedPreferences prefs =
+                    await SharedPreferences.getInstance();
                 final token = prefs.getString('jwt_token') ?? '';
                 final userId = prefs.getString('userId') ?? '';
                 final myName = await getNameFromUser(userId);
@@ -531,7 +699,7 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
               },
               child: Text(
                 "Chat with ${widget.advocateDetailsModel.name}",
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 20,
                   color: Colors.black,
                   fontWeight: FontWeight.bold,
@@ -539,6 +707,55 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
               ),
             ),
             const SizedBox(height: 20),
+
+            /// ================= BOOKMARK BUTTON =================
+            // ✅ NEW: same as user panel — full-width outlined button.
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _isBookmarked
+                      ? Colors.red.shade600
+                      : Colors.grey.shade700,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  side: BorderSide(
+                    color: _isBookmarked
+                        ? Colors.red.shade300
+                        : Colors.grey.shade400,
+                    width: 1.5,
+                  ),
+                ),
+                onPressed: _bookmarkBusy ? null : _toggleBookmark,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _isBookmarked
+                          ? Icons.bookmark
+                          : Icons.bookmark_border,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      _isBookmarked
+                          ? "Bookmarked"
+                          : "Bookmark this Advocate",
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            /// ================= REMOVE ADVOCATE BUTTON =================
             FutureBuilder<bool>(
               future: isMyAdvocate(),
               builder: (context, snapshot) {
@@ -594,7 +811,7 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
                     },
                     child: Text(
                       "Remove ${widget.advocateDetailsModel.name}",
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: Colors.black,

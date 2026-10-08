@@ -1,8 +1,8 @@
-// question_card.dart - Center Admin (Redesigned)
+// question_card.dart — Center Admin with full delete permissions
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'package:advocatechaicenteradmin/QuestionPages/question_response.dart';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:html' as html;
+
 import '../Auth/AuthService.dart';
 import '../Utils/AdvocateSpeciality.dart';
 import '../Utils/BaseURL.dart' as baseURL;
@@ -23,6 +24,9 @@ import 'AnswerTile.dart';
 import 'QuestionModel.dart';
 import 'QuestionService.dart';
 import '../PageTransition.dart';
+import '../QuestionPages/QuestionAttachmentViewer.dart';
+import '../QuestionPages/question_attachment_widget.dart';
+import '../QuestionPages/question_response.dart';
 
 class QuestionCard extends StatefulWidget {
   final QuestionResponse question;
@@ -42,12 +46,14 @@ class _QuestionCardState extends State<QuestionCard> {
   String currentUserId = "";
   bool isMyQuestion = false;
   bool _isAdmin = false;
+  String? myLoggedInToken;
 
   PlatformFile? selectedFile;
   String? fileName;
   String? fileExtension;
 
-  final List<PageTransitionType> _smoothAnimations = AnimatedRoute.getCompanySafeAnimations();
+  final List<PageTransitionType> _smoothAnimations =
+      AnimatedRoute.getCompanySafeAnimations();
 
   PageTransitionType _getRandomAnimation() {
     final random = Random().nextInt(_smoothAnimations.length);
@@ -79,11 +85,23 @@ class _QuestionCardState extends State<QuestionCard> {
     _checkAdminStatus();
   }
 
+  Future<void> loadUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    currentUserId = prefs.getString("userId") ?? "";
+    myLoggedInToken = prefs.getString('jwt_token') ?? '';
+
+    if (!mounted) return;
+    setState(() {
+      isMyQuestion = currentUserId == widget.question.userId;
+    });
+  }
+
+  // ── Check if current user is a center admin ─────────────────────────────
   Future<void> _checkAdminStatus() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token') ?? '';
     final userId = prefs.getString('userId') ?? '';
-    
+
     final response = await http.get(
       Uri.parse("${baseURL.Urls().baseURL}center-admin/by-user/$userId"),
       headers: {
@@ -91,23 +109,15 @@ class _QuestionCardState extends State<QuestionCard> {
         'Authorization': 'Bearer $token',
       },
     );
-    
-    if (response.statusCode == 200) {
+
+    if (response.statusCode == 200 && mounted) {
       setState(() {
         _isAdmin = true;
       });
     }
   }
 
-  Future<void> loadUser() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    currentUserId = prefs.getString("userId") ?? "";
-
-    setState(() {
-      isMyQuestion = currentUserId == widget.question.userId;
-    });
-  }
-
+  // ── Attachment helpers ──────────────────────────────────────────────────
   String _getExtensionFromContentType(String? contentType) {
     if (contentType == null) return ".bin";
     if (contentType.contains("pdf")) return ".pdf";
@@ -120,7 +130,8 @@ class _QuestionCardState extends State<QuestionCard> {
     return ".bin";
   }
 
-  Future<void> openAttachment(BuildContext context, String attachmentId) async {
+  Future<void> openAttachment(
+      BuildContext context, String attachmentId) async {
     try {
       final url = "${baseURL.Urls().baseURL}questions/downloadQuestionContent?attachmentId=$attachmentId";
       final token = await AuthService.getToken();
@@ -131,6 +142,7 @@ class _QuestionCardState extends State<QuestionCard> {
       );
 
       if (response.statusCode != 200) {
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Download failed")),
         );
@@ -144,13 +156,18 @@ class _QuestionCardState extends State<QuestionCard> {
         if (match != null) fileName = match.group(1)!;
       }
 
-      final contentType = response.headers['content-type'] ?? "application/octet-stream";
-      if (!fileName.contains(".")) fileName += _getExtensionFromContentType(contentType);
+      final contentType =
+          response.headers['content-type'] ?? "application/octet-stream";
+      if (!fileName.contains(".")) {
+        fileName += _getExtensionFromContentType(contentType);
+      }
 
       if (kIsWeb) {
         final blob = html.Blob([response.bodyBytes], contentType);
         final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)..setAttribute("download", fileName)..click();
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute("download", fileName)
+          ..click();
         html.Url.revokeObjectUrl(url);
         return;
       }
@@ -161,6 +178,7 @@ class _QuestionCardState extends State<QuestionCard> {
       await file.writeAsBytes(response.bodyBytes);
       await OpenFilex.open(filePath);
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Attachment error: $e")),
       );
@@ -168,12 +186,15 @@ class _QuestionCardState extends State<QuestionCard> {
   }
 
   Future<String> getNameFromUser(String userId) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token') ?? '';
     final url = "${BASE_URL.Urls().baseURL}user/search?userId=$userId";
     final response = await http.get(
       Uri.parse(url),
-      headers: {"content-type": "application/json", "Authorization": "Bearer $token"},
+      headers: {
+        "content-type": "application/json",
+        "Authorization": "Bearer $token",
+      },
     );
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body);
@@ -186,21 +207,160 @@ class _QuestionCardState extends State<QuestionCard> {
     if (extension == null) return null;
     extension = extension.toLowerCase();
     switch (extension) {
-      case 'jpg': case 'jpeg': return 'image/jpeg';
-      case 'png': return 'image/png';
-      case 'pdf': return 'application/pdf';
-      case 'mp4': return 'video/mp4';
-      case 'doc': return 'application/msword';
-      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      case 'txt': return 'text/plain';
-      default: return 'application/octet-stream';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'pdf':
+        return 'application/pdf';
+      case 'mp4':
+        return 'video/mp4';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'txt':
+        return 'text/plain';
+      default:
+        return 'application/octet-stream';
     }
   }
 
+  void _navigateToAttachmentViewer(String attachmentId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('jwt_token') ?? '';
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => QuestionAttachmentViewer(
+          attachmentId: attachmentId,
+          jwtToken: token,
+        ),
+      ),
+    );
+  }
+
+  // ── Delete question ───────────────────────────────────────────────────
+  Future<void> _deleteQuestion() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Text(
+          "Delete Question",
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.bold,
+            color: Colors.red,
+          ),
+        ),
+        content: Text(
+          "Are you sure you want to delete this question?",
+          style: GoogleFonts.inter(color: Colors.grey[700]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              "Cancel",
+              style: GoogleFonts.inter(color: Colors.grey[600]),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // Show a loading dialog while deleting
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            "Deleting question...",
+            style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: Colors.red),
+              const SizedBox(height: 10),
+              Text("Please wait...", style: GoogleFonts.inter()),
+            ],
+          ),
+        );
+      },
+    );
+
+    try {
+      final res = await QuestionService.deleteQuestion(
+        questionId: widget.question.id!,
+        userId: currentUserId,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context); // close loading dialog
+
+      if (res) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Question deleted successfully",
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        widget.refreshMethod();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Failed to delete question",
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Delete failed: $e", style: GoogleFonts.inter()),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  // ── Edit dialog ────────────────────────────────────────────────────────
   void showEditDialog() {
-    TextEditingController messageController = TextEditingController(text: widget.question.message);
+    TextEditingController messageController =
+        TextEditingController(text: widget.question.message);
     String selectedType = widget.question.questionType.apiValue;
-    
+
     selectedFile = null;
     fileName = null;
     fileExtension = null;
@@ -212,8 +372,13 @@ class _QuestionCardState extends State<QuestionCard> {
           builder: (context, setDialogState) {
             return AlertDialog(
               backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Text("Edit Question", style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                "Edit Question",
+                style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -223,18 +388,25 @@ class _QuestionCardState extends State<QuestionCard> {
                     style: GoogleFonts.inter(),
                     decoration: InputDecoration(
                       labelText: "Message",
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
                     value: selectedType,
                     items: AdvocateSpeciality.values.map((e) {
-                      return DropdownMenuItem(value: e.name, child: Text(e.label));
+                      return DropdownMenuItem(
+                        value: e.name,
+                        child: Text(e.label),
+                      );
                     }).toList(),
                     onChanged: (v) => selectedType = v!,
                     decoration: InputDecoration(
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -246,21 +418,29 @@ class _QuestionCardState extends State<QuestionCard> {
                     icon: const Icon(Icons.attach_file),
                     label: const Text("Choose Attachment"),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A237E),
+                      backgroundColor: Colors.purple,
                       foregroundColor: Colors.white,
                     ),
                   ),
                   if (fileName != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: Text(fileName!, style: GoogleFonts.inter(color: Colors.green)),
+                      child: Text(
+                        fileName!,
+                        style: GoogleFonts.inter(color: Colors.green),
+                      ),
                     ),
-                  if (widget.question.attachmentId != null && widget.question.attachmentId!.isNotEmpty && selectedFile == null)
+                  if (widget.question.attachmentId != null &&
+                      widget.question.attachmentId!.isNotEmpty &&
+                      selectedFile == null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         "Current attachment will be replaced if you choose a new one",
-                        style: GoogleFonts.inter(fontSize: 11, color: Colors.orange),
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: Colors.orange,
+                        ),
                       ),
                     ),
                 ],
@@ -278,14 +458,24 @@ class _QuestionCardState extends State<QuestionCard> {
                       builder: (BuildContext context) {
                         return AlertDialog(
                           backgroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          title: Text("Updating question...", style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          title: Text(
+                            "Updating question...",
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           content: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const CircularProgressIndicator(color: Color(0xFF1A237E)),
+                              const CircularProgressIndicator(
+                                color: Colors.purple,
+                              ),
                               const SizedBox(height: 10),
-                              Text("Please wait...", style: GoogleFonts.inter()),
+                              Text("Please wait...",
+                                  style: GoogleFonts.inter()),
                             ],
                           ),
                         );
@@ -293,21 +483,27 @@ class _QuestionCardState extends State<QuestionCard> {
                     );
 
                     try {
-                      SharedPreferences prefs = await SharedPreferences.getInstance();
+                      final prefs =
+                          await SharedPreferences.getInstance();
                       final token = prefs.getString('jwt_token') ?? '';
 
-                      final uri = Uri.parse("${baseURL.Urls().baseURL}questions/update");
+                      final uri = Uri.parse(
+                          "${baseURL.Urls().baseURL}questions/update");
                       var request = http.MultipartRequest("PUT", uri);
                       request.headers["Authorization"] = "Bearer $token";
 
                       request.fields["userId"] = widget.question.userId;
                       request.fields["usersId"] = widget.question.userId;
-                      request.fields["message"] = messageController.text.trim();
+                      request.fields["message"] =
+                          messageController.text.trim();
                       request.fields["questionType"] = selectedType;
                       request.fields["questionId"] = widget.question.id!;
-                      
-                      if (widget.question.attachmentId != null && widget.question.attachmentId!.isNotEmpty && selectedFile == null) {
-                        request.fields["attachmentId"] = widget.question.attachmentId!;
+
+                      if (widget.question.attachmentId != null &&
+                          widget.question.attachmentId!.isNotEmpty &&
+                          selectedFile == null) {
+                        request.fields["attachmentId"] =
+                            widget.question.attachmentId!;
                       } else {
                         request.fields["attachmentId"] = "attachmentId";
                       }
@@ -353,15 +549,20 @@ class _QuestionCardState extends State<QuestionCard> {
                       }
 
                       final streamedResponse = await request.send();
-                      final response = await http.Response.fromStream(streamedResponse);
+                      final response =
+                          await http.Response.fromStream(streamedResponse);
 
                       if (context.mounted) Navigator.pop(context);
                       if (context.mounted) Navigator.pop(context);
 
-                      if (response.statusCode == 200 || response.statusCode == 201) {
+                      if (response.statusCode == 200 ||
+                          response.statusCode == 201) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text("Question updated successfully", style: GoogleFonts.inter()),
+                            content: Text(
+                              "Question updated successfully",
+                              style: GoogleFonts.inter(),
+                            ),
                             backgroundColor: Colors.green,
                             behavior: SnackBarBehavior.floating,
                           ),
@@ -370,7 +571,10 @@ class _QuestionCardState extends State<QuestionCard> {
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text("Failed: ${response.body}", style: GoogleFonts.inter()),
+                            content: Text(
+                              "Failed: ${response.body}",
+                              style: GoogleFonts.inter(),
+                            ),
                             backgroundColor: Colors.red,
                             behavior: SnackBarBehavior.floating,
                           ),
@@ -381,7 +585,10 @@ class _QuestionCardState extends State<QuestionCard> {
                       if (context.mounted) Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text("Update failed: $e", style: GoogleFonts.inter()),
+                          content: Text(
+                            "Update failed: $e",
+                            style: GoogleFonts.inter(),
+                          ),
                           backgroundColor: Colors.red,
                           behavior: SnackBarBehavior.floating,
                         ),
@@ -398,12 +605,18 @@ class _QuestionCardState extends State<QuestionCard> {
     );
   }
 
+  // ── Build ───────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final bool hasAttachment = widget.question.attachmentId != null && 
-                               widget.question.attachmentId!.isNotEmpty && 
-                               widget.question.attachmentId != "null" &&
-                               widget.question.attachmentId != "attachmentId";
+    final bool hasAttachment = widget.question.attachmentId != null &&
+        widget.question.attachmentId!.isNotEmpty &&
+        widget.question.attachmentId != "null" &&
+        widget.question.attachmentId != "attachmentId";
+
+    // ✅ Show delete for: my questions, OR center admin (delete any question)
+    // ✅ Show edit for: my questions only
+    final bool canDelete = isMyQuestion || _isAdmin;
+    final bool canEdit = isMyQuestion;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
@@ -428,86 +641,64 @@ class _QuestionCardState extends State<QuestionCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Row
+                // ── Header: type badge + menu ───────────────────────────
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF1A237E), Color(0xFF283593)],
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.purple.shade600,
+                            Colors.blue.shade600,
+                          ],
                         ),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(
-                        widget.question.questionType.label,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            widget.question.questionType.icon,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            widget.question.questionType.label,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const Spacer(),
-                    // Show menu for own questions OR for admin
-                    if (isMyQuestion || _isAdmin)
+
+                    // ✅ Center Admin can also delete any question
+                    if (canDelete)
                       PopupMenuButton<String>(
-                        icon: Icon(Icons.more_vert, color: Colors.grey[600]),
+                        icon:
+                            Icon(Icons.more_vert, color: Colors.grey[600]),
                         itemBuilder: (context) => [
-                          if (isMyQuestion)
-                            const PopupMenuItem(value: "edit", child: Text("Edit")),
-                          const PopupMenuItem(value: "delete", child: Text("Delete")),
+                          if (canEdit)
+                            const PopupMenuItem(
+                              value: "edit",
+                              child: Text("Edit"),
+                            ),
+                          const PopupMenuItem(
+                            value: "delete",
+                            child: Text("Delete"),
+                          ),
                         ],
                         onSelected: (value) async {
-                          if (value == "edit" && isMyQuestion) {
+                          if (value == "edit" && canEdit) {
                             showEditDialog();
                           }
                           if (value == "delete") {
-                            showDialog(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (BuildContext context) {
-                                return AlertDialog(
-                                  backgroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  title: Text("Deleting question...", style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const CircularProgressIndicator(color: Colors.red),
-                                      const SizedBox(height: 10),
-                                      Text("Please wait...", style: GoogleFonts.inter()),
-                                    ],
-                                  ),
-                                );
-                              },
-                            );
-
-                            final res = await QuestionService.deleteQuestion(
-                              questionId: widget.question.id!,
-                              userId: currentUserId,
-                            );
-                            
-                            if (context.mounted) Navigator.pop(context);
-                            
-                            if (res) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("Question deleted successfully", style: GoogleFonts.inter()),
-                                  backgroundColor: Colors.green,
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                              widget.refreshMethod();
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text("Failed to delete question", style: GoogleFonts.inter()),
-                                  backgroundColor: Colors.red,
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
+                            _deleteQuestion();
                           }
                         },
                       ),
@@ -515,27 +706,30 @@ class _QuestionCardState extends State<QuestionCard> {
                 ),
                 const SizedBox(height: 12),
 
-                // User Name
+                // ── Author row ──────────────────────────────────────────
                 Row(
                   children: [
                     CircleAvatar(
                       radius: 16,
-                      backgroundColor: const Color(0xFF1A237E).withOpacity(0.1),
+                      backgroundColor: Colors.purple.withOpacity(0.1),
                       child: Text(
-                        widget.question.userName.isNotEmpty ? widget.question.userName[0].toUpperCase() : "U",
+                        widget.question.userName.isNotEmpty
+                            ? widget.question.userName[0].toUpperCase()
+                            : "U",
                         style: GoogleFonts.inter(
-                          fontSize: 14,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF1A237E),
+                          color: Colors.purple,
                         ),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        widget.question.userName,
+                        widget.question.fullName ??
+                            widget.question.userName,
                         style: GoogleFonts.inter(
-                          fontSize: 14,
+                          fontSize: 18,
                           fontWeight: FontWeight.w600,
                           color: Colors.grey[800],
                         ),
@@ -545,59 +739,42 @@ class _QuestionCardState extends State<QuestionCard> {
                 ),
                 const SizedBox(height: 12),
 
-                // Question Message
+                // ── Question message ────────────────────────────────────
                 Text(
                   widget.question.message,
                   style: GoogleFonts.inter(
-                    fontSize: 15,
+                    fontSize: 18,
                     color: Colors.grey[700],
                     height: 1.4,
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // Only show attachment button if attachment actually exists
+                // ── Attachment (inline preview + viewer) ────────────────
                 if (hasAttachment)
-                  InkWell(
-                    onTap: () => openAttachment(context, widget.question.attachmentId!),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A237E).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.attach_file, size: 16, color: const Color(0xFF1A237E)),
-                          const SizedBox(width: 6),
-                          Text(
-                            "View Attachment",
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: const Color(0xFF1A237E),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(Icons.open_in_new, size: 14, color: const Color(0xFF1A237E)),
-                        ],
-                      ),
-                    ),
+                  QuestionAttachmentWidget(
+                    attachmentId: widget.question.attachmentId!,
+                    height: 150,
+                    onViewAttachment: _navigateToAttachmentViewer,
                   ),
 
                 const Divider(color: Colors.grey, height: 24),
 
-                // Answers Section
+                // ── Answers header ──────────────────────────────────────
                 Row(
                   children: [
-                    Icon(Icons.chat_bubble_outline, size: 16, color: Colors.grey[500]),
+                    Icon(
+                      Icons.chat_bubble_outline,
+                      size: 16,
+                      color: Colors.grey[500],
+                    ),
                     const SizedBox(width: 6),
                     Text(
-                      widget.question.answers.isEmpty ? "No answers yet" : "Answers (${widget.question.answers.length})",
+                      widget.question.answers.isEmpty
+                          ? "No answers yet"
+                          : "Answers (${widget.question.answers.length})",
                       style: GoogleFonts.inter(
-                        fontSize: 13,
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: Colors.grey[600],
                       ),
@@ -606,6 +783,7 @@ class _QuestionCardState extends State<QuestionCard> {
                 ),
                 const SizedBox(height: 10),
 
+                // ── Answers list ────────────────────────────────────────
                 if (widget.question.answers.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -617,7 +795,7 @@ class _QuestionCardState extends State<QuestionCard> {
                       child: Text(
                         "Be the first to answer this question",
                         style: GoogleFonts.inter(
-                          fontSize: 13,
+                          fontSize: 16,
                           color: Colors.grey[500],
                         ),
                       ),
@@ -625,10 +803,12 @@ class _QuestionCardState extends State<QuestionCard> {
                   )
                 else
                   Column(
-                    children: widget.question.answers.map((a) => AnswerTile(
-                      answer: a, 
-                      onRefresh: widget.refreshMethod,
-                    )).toList(),
+                    children: widget.question.answers
+                        .map((a) => AnswerTile(
+                              answer: a,
+                              onRefresh: widget.refreshMethod,
+                            ))
+                        .toList(),
                   ),
               ],
             ),

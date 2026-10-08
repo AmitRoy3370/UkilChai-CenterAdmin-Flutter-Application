@@ -3,8 +3,13 @@ import 'package:flutter/material.dart';
 
 class WelcomePopup extends StatelessWidget {
   final VoidCallback onContinue;
+  final VoidCallback? onSkip;
 
-  const WelcomePopup({super.key, required this.onContinue});
+  const WelcomePopup({
+    super.key,
+    required this.onContinue,
+    this.onSkip,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +49,7 @@ class WelcomePopup extends StatelessWidget {
             const SizedBox(height: 16),
 
             const Text(
-              "আপনার আইনি সহায়তার সেরা অ্যাডভোকেট খুঁজুন, প্রশ্ন করুন, ফ্রি কনসালটেশন নিন এবং কেস ম্যানেজ করুন সহজেই।",
+              "আপনার আইনি সহায়তার সেরা অ্যাডভোকেট খুঁজুন, প্রশ্ন করুন, ফ্রি কনসালটেশন নিন এবং কেস ম্যানেজ করুন সহজেই।",
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey,
@@ -54,22 +59,38 @@ class WelcomePopup extends StatelessWidget {
             ),
             const SizedBox(height: 32),
 
-            // Buttons
+            // Buttons — "পরে দেখব" calls onSkip if provided, otherwise
+            // just pops the dialog (same as before).
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("পরে দেখব", style: TextStyle(color: Colors.grey)),
+                  onPressed: () {
+                    if (onSkip != null) {
+                      onSkip!();
+                    } else {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text(
+                    "পরে দেখব",
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: onContinue,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: const Text("শুরু করি", style: TextStyle(fontSize: 16)),
+                  child: const Text(
+                    "শুরু করি",
+                    style: TextStyle(fontSize: 16),
+                  ),
                 ),
               ],
             ),

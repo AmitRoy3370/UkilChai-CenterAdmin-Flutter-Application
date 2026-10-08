@@ -5,6 +5,7 @@ class ChatResponse {
   String? id;
   String? senderId;
   String? senderName;
+  String? senderFullName;
   SenderInfo? senderInfo;
   ReceiverInfo? receiverInfo;
   DateTime? timeStamp;
@@ -13,6 +14,7 @@ class ChatResponse {
     this.id,
     this.senderId,
     this.senderName,
+    this.senderFullName,
     this.senderInfo,
     this.receiverInfo,
     this.timeStamp,
@@ -24,6 +26,7 @@ class ChatResponse {
       id: json['id'] != null ? json['id'].toString() : null,
       senderId: json['senderId'] != null ? json['senderId'].toString() : null,
       senderName: json['senderName'] != null ? json['senderName'].toString() : null,
+      senderFullName: json['senderFullName'] != null ? json['senderFullName'].toString() : null,
       senderInfo: json['senderInfo'] != null
           ? SenderInfo.fromJson(json['senderInfo'])
           : null,

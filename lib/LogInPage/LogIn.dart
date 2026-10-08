@@ -1,5 +1,7 @@
-// LogIn.dart - Without using Provider to avoid the error
+// LogIn.dart (Center Admin) — Universal Login (Username / Email / Phone)
+// Visuals + routing matched to Admin panel, plus center-admin-only gate.
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -20,12 +22,33 @@ class LogIn extends StatefulWidget {
   }
 }
 
-class LogInState extends State<LogIn> {
-  TextEditingController emailController = TextEditingController();
-  TextEditingController passwordController = TextEditingController();
+class LogInState extends State<LogIn> with SingleTickerProviderStateMixin {
+  final TextEditingController identifierController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+
   bool isVisible = false;
   bool _isPasswordVisible = false;
   bool _isLoading = false;
+
+  late final AnimationController _spinController;
+
+  @override
+  void initState() {
+    super.initState();
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..repeat();
+    doesItVisible();
+  }
+
+  @override
+  void dispose() {
+    _spinController.dispose();
+    identifierController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
 
   Future<bool> doesItVisible() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -50,6 +73,7 @@ class LogInState extends State<LogIn> {
       return false;
     }
 
+    if (!mounted) return false;
     setState(() {
       isVisible = true;
     });
@@ -88,90 +112,273 @@ class LogInState extends State<LogIn> {
     }
   }
 
-  Future<void> _submitForm() async {
-    String email = emailController.text;
-    String password = passwordController.text;
+  // ============================================================
+  // ✅ Detect: email / phone / username
+  // ============================================================
+  String _detectLoginType(String input) {
+    final trimmed = input.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    // 1) Email
+    final emailRegex = RegExp(r'^[\w\.\-\+]+@([\w\-]+\.)+[a-zA-Z]{2,}$');
+    if (emailRegex.hasMatch(trimmed)) {
+      return 'email';
+    }
+
+    // 2) Phone
+    final digitsOnly = trimmed.replaceAll(RegExp(r'\D'), '');
+    final looksLikePhone = RegExp(r'^\+?[\d\s\-\(\)]+$').hasMatch(trimmed);
+    if (looksLikePhone && digitsOnly.length >= 7 && digitsOnly.length <= 15) {
+      return 'phone';
+    }
+
+    // 3) Fallback: username
+    return 'username';
+  }
+
+  String _normalizePhone(String input) {
+    final trimmed = input.trim();
+    final hasPlus = trimmed.startsWith('+');
+    final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+    return hasPlus ? '+$digits' : digits;
+  }
+
+  // ============================================================
+  // ✅ Build URL: username → /auth/login (JSON body)
+  //              email    → /auth/login/email?email=..&password=..
+  //              phone    → /auth/login/phone?phone=..&password=..
+  // ============================================================
+  Uri _buildLoginUri(String loginType, String identifier, String password) {
+    final base = baseURL.Urls().baseURL;
+
+    switch (loginType) {
+      case 'email':
+        return Uri.parse("${base}auth/login/email").replace(
+          queryParameters: {"email": identifier, "password": password},
+        );
+      case 'phone':
+        return Uri.parse("${base}auth/login/phone").replace(
+          queryParameters: {"phone": identifier, "password": password},
+        );
+      case 'username':
+      default:
+        return Uri.parse("${base}auth/login");
+    }
+  }
+
+  Future<void> _submitForm() async {
+    final String rawIdentifier = identifierController.text.trim();
+    final String password = passwordController.text;
+
+    if (rawIdentifier.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter email and password")),
+        const SnackBar(
+          content: Text("Please enter username/email/phone and password"),
+        ),
       );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    final String loginType = _detectLoginType(rawIdentifier);
+    final String identifier =
+        loginType == 'phone' ? _normalizePhone(rawIdentifier) : rawIdentifier;
 
-    String loginURL = "${baseURL.Urls().baseURL}auth/login";
-    Uri uri = Uri.parse(loginURL);
+    setState(() => _isLoading = true);
 
-    var logInResponse = await http.post(
-      uri,
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"userName": email, "password": password}),
-    );
+    final Uri uri = _buildLoginUri(loginType, identifier, password);
 
-    setState(() {
-      _isLoading = false;
-    });
+    // Username uses JSON body (existing contract).
+    // Email / phone send everything as query params (new contract).
+    final Map<String, dynamic> body = loginType == 'username'
+        ? {"userName": identifier, "password": password}
+        : {};
+
+    print("🔍 Detected type : $loginType");
+    print("🌐 Endpoint      : $uri");
+    if (body.isNotEmpty) {
+      print("📤 Body          : ${jsonEncode(body)}");
+    }
+
+    http.Response logInResponse;
+    try {
+      logInResponse = await http.post(
+        uri,
+        headers: {"Content-Type": "application/json"},
+        body: body.isEmpty ? null : jsonEncode(body),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showError("Network error: $e");
+      return;
+    }
+
+    print("📥 Status        : ${logInResponse.statusCode}");
+    print("📥 Body          : ${logInResponse.body}");
 
     if (logInResponse.statusCode == 200 || logInResponse.statusCode == 201) {
+      // ---- 1) Parse login response ----
       final decoded = jsonDecode(logInResponse.body);
       final userId = decoded["userId"];
       final String token = decoded["token"];
 
+      // ---- 2) Center-admin only gate ----
       final centerAdminResponse = await http.get(
-             Uri.parse('${baseURL.Urls().baseURL}center-admin/by-user/$userId'),
-             headers: {"Authorization": "Bearer $token"},
+        Uri.parse(
+            '${baseURL.Urls().baseURL}center-admin/by-user/$userId'),
+        headers: {"Authorization": "Bearer $token"},
       );
 
-      if(centerAdminResponse.statusCode == 200 || centerAdminResponse.statusCode == 201) {
+      if (centerAdminResponse.statusCode == 200 ||
+          centerAdminResponse.statusCode == 201) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString("jwt_token", token);
+        await prefs.setString("userId", userId);
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString("jwt_token", token);
-      await prefs.setString("userId", userId);
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          isVisible = true;
+        });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Logged in successfully...")),
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Logged in successfully...")),
+        );
 
-      setState(() {
-        isVisible = true;
-      });
-      
-      AuthService.saveToken(token);
-      AuthService.saveUserId(userId);
-      setUserActive(true);
-      
-      // Just return true - no Provider usage
-      if (mounted) {
-        /*if (homePageKey.currentState != null) {
-          await homePageKey.currentState!.refreshUserData();
-        }*/
-        Navigator.pop(context, true);
-       
-      }
+        AuthService.saveToken(token);
+        AuthService.saveUserId(userId);
+        setUserActive(true);
 
+        if (mounted) {
+          Navigator.pop(context, true);
+        }
       } else {
+        // Logged in but not a center admin
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'You have to be the center admin to take access at here...',
+            ),
+          ),
+        );
+      }
+    } else {
+      // ---- Login itself failed ----
+      if (!mounted) return;
+      setState(() => _isLoading = false);
 
-         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('You have to be the center admin to take access at here...')),
-         );
+      final code = logInResponse.statusCode;
+      final respBody = logInResponse.body;
 
+      String message;
+      if (code == 401 || code == 403) {
+        message = "Access denied ($code). Endpoint: $uri";
+      } else if (code == 404) {
+        message = "Endpoint not found: $uri";
+      } else if (code == 400) {
+        message = "Bad request ($code). Server rejected the request shape.";
+      } else if (code >= 500) {
+        message = "Server error ($code). Please try again.";
+      } else {
+        message = "Login failed ($code): $respBody";
       }
 
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(logInResponse.body)),
-      );
+      _showError(message);
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    doesItVisible();
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red.shade700,
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
+  // ============================================================
+  // ✅ Spinning Badge Logo
+  // ============================================================
+  Widget _buildSpinningLogo() {
+    const double badgeSize = 120;
+    const double ringWidth = 4;
+    const double innerPadding = 6;
+
+    return SizedBox(
+      width: badgeSize,
+      height: badgeSize,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: badgeSize,
+            height: badgeSize,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.green.shade700.withOpacity(0.18),
+                  blurRadius: 24,
+                  spreadRadius: 2,
+                ),
+                BoxShadow(
+                  color: Colors.green.shade200.withOpacity(0.5),
+                  blurRadius: 14,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+          ),
+          RotationTransition(
+            turns: _spinController,
+            child: CustomPaint(
+              size: const Size(badgeSize, badgeSize),
+              painter: _LoginRingPainter(
+                ringWidth: ringWidth,
+                colors: [
+                  Colors.green.shade300,
+                  Colors.green.shade700,
+                  Colors.lightGreen.shade400,
+                  Colors.green.shade700,
+                  Colors.green.shade300,
+                ],
+              ),
+            ),
+          ),
+          Container(
+            width: badgeSize - (ringWidth * 2) - (innerPadding * 2),
+            height: badgeSize - (ringWidth * 2) - (innerPadding * 2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white,
+              border: Border.all(color: Colors.green.shade50, width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(16),
+            child: ClipOval(
+              child: Image.asset(
+                'assets/images/logo.png',
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.gavel_rounded,
+                  color: Colors.green.shade700,
+                  size: 42,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -185,18 +392,9 @@ class LogInState extends State<LogIn> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 40),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.green.shade50,
-                ),
-                child: Icon(
-                  Icons.gavel,
-                  size: 60,
-                  color: Colors.green.shade700,
-                ),
-              ),
+
+              _buildSpinningLogo(),
+
               const SizedBox(height: 20),
               Text(
                 "Welcome Back!",
@@ -215,34 +413,52 @@ class LogInState extends State<LogIn> {
                 ),
               ),
               const SizedBox(height: 40),
+
+              // ✅ Universal input: username / email / phone
               TextField(
-                controller: emailController,
+                controller: identifierController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
                 style: GoogleFonts.inter(fontSize: 16),
                 decoration: InputDecoration(
-                  hintText: 'Enter your username',
+                  hintText: 'Username, Email or Phone',
                   hintStyle: GoogleFonts.inter(color: Colors.grey.shade400),
-                  prefixIcon: Icon(Icons.person_outline, color: Colors.green.shade600),
+                  prefixIcon: Icon(
+                    Icons.person_outline,
+                    color: Colors.green.shade600,
+                  ),
                   filled: true,
                   fillColor: Colors.grey.shade50,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
+
               TextField(
                 controller: passwordController,
                 obscureText: !_isPasswordVisible,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submitForm(),
                 style: GoogleFonts.inter(fontSize: 16),
                 decoration: InputDecoration(
                   hintText: 'Enter your password',
                   hintStyle: GoogleFonts.inter(color: Colors.grey.shade400),
-                  prefixIcon: Icon(Icons.lock_outline, color: Colors.green.shade600),
+                  prefixIcon: Icon(
+                    Icons.lock_outline,
+                    color: Colors.green.shade600,
+                  ),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
+                      _isPasswordVisible
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                       color: Colors.grey.shade600,
                     ),
                     onPressed: () {
@@ -257,10 +473,14 @@ class LogInState extends State<LogIn> {
                     borderRadius: BorderRadius.circular(16),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
+
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -292,6 +512,7 @@ class LogInState extends State<LogIn> {
                 ),
               ),
               const SizedBox(height: 16),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -303,7 +524,9 @@ class LogInState extends State<LogIn> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const RegistrationPage()),
+                        MaterialPageRoute(
+                          builder: (_) => const RegistrationPage(),
+                        ),
                       );
                     },
                     child: Text(
@@ -321,5 +544,57 @@ class LogInState extends State<LogIn> {
         ),
       ),
     );
+  }
+}
+
+// ============================================================
+// Custom painter — gradient ring
+// ============================================================
+class _LoginRingPainter extends CustomPainter {
+  final double ringWidth;
+  final List<Color> colors;
+
+  _LoginRingPainter({required this.ringWidth, required this.colors});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - ringWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = ringWidth
+      ..strokeCap = StrokeCap.round
+      ..shader = SweepGradient(
+        colors: colors,
+        stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
+        startAngle: 0,
+        endAngle: math.pi * 2,
+      ).createShader(rect);
+
+    canvas.drawCircle(center, radius, paint);
+
+    final shinePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = ringWidth * 0.5
+      ..strokeCap = StrokeCap.round
+      ..shader = SweepGradient(
+        colors: [
+          Colors.white.withOpacity(0.0),
+          Colors.white.withOpacity(0.9),
+          Colors.white.withOpacity(0.0),
+        ],
+        stops: const [0.0, 0.04, 0.09],
+        startAngle: 0,
+        endAngle: math.pi * 2,
+      ).createShader(rect);
+
+    canvas.drawCircle(center, radius, shinePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LoginRingPainter old) {
+    return old.ringWidth != ringWidth || old.colors != colors;
   }
 }
