@@ -212,9 +212,23 @@ class RjscService {
   // ==========================================================================
   // 3. FIND BY ID — GET /api/rjsc/{id}
   // ==========================================================================
-  static Future<Map<String, dynamic>> findById(String id) async {
-    return _getRequest('$_baseUrl/$id');
+static Future<Map<String, dynamic>> findById(String id) async {
+  final uri = Uri.parse('${BASE_URL.Urls().baseURL}rjsc/$id');
+  final token = await AuthService.getToken();
+  final res = await http.get(uri, headers: {
+    'Authorization': 'Bearer $token',
+    'Accept': 'application/json',
+  });
+  return _handleResponse(res);
+}
+
+static RjscResponseDTO? parseSingle(Map<String, dynamic> json) {
+  if (json['status'] == 'success' && json['data'] != null) {
+    return RjscResponseDTO.fromJson(
+        Map<String, dynamic>.from(json['data']));
   }
+  return null;
+}
 
   // ==========================================================================
   // 4. FIND ALL — GET /api/rjsc/all

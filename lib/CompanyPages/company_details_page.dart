@@ -11,10 +11,13 @@ import '../CompanyPages/company_contact_service.dart';
 import '../CompanyPages/company_contact.dart';
 import '../CompanyPages/registration_process_service.dart';
 import '../CompanyPages/registration_process_response.dart';
+import '../CompanyPages/registration_process.dart';
 import '../CompanyPages/company_payment_service.dart';
 import '../CompanyPages/company_payment_response.dart';
 import '../CompanyPages/company_request_payment.dart';
 import '../CompanyPages/edit_company_screen.dart';
+import '../CompanyPages/center_admin_bridge.dart';
+import '../CompanyPages/company_process_control_screen.dart';
 import '../Auth/AuthService.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -33,9 +36,10 @@ class CompanyDetailsPage extends StatefulWidget {
 class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
   final CompanyService _companyService = CompanyService();
   final CompanyContactService _contactService = CompanyContactService();
-  final RegistrationProcessService _processService = RegistrationProcessService();
+  final RegistrationProcessService _processService =
+      RegistrationProcessService();
   final CompanyPaymentService _paymentService = CompanyPaymentService();
-  
+
   CompanyResponse? _company;
   bool _isLoading = true;
   String? _error;
@@ -58,14 +62,70 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
   String? _paymentsError;
   bool _isCreator = false;
 
+  // ✅ Center admin ownership
+  bool _isCenterAdminOfThis = false;
+  bool _isBusy = false;
+
   // ✅ Fixed payment details
   static const String _receiverNumber = "+8801874648472";
   static const double _paymentAmount = 5000.0;
 
   // ✅ Payment form controllers
-  final TextEditingController _senderPhoneController = TextEditingController();
-  final TextEditingController _transactionIdController = TextEditingController();
+  final TextEditingController _senderPhoneController =
+      TextEditingController();
+  final TextEditingController _transactionIdController =
+      TextEditingController();
   final TextEditingController _amountController = TextEditingController();
+
+  // ============================================================
+  // Single source of truth for the "current" registration process
+  //
+  // Priority:
+  //   1. _processes[0] — the freshest data (from getProcessesByCompanyId)
+  //   2. _company?.registrationProcess — fallback if the list hasn't loaded
+  // ============================================================
+
+  /// Convert the writable model into the response model so both branches
+  /// of `_currentProcess` return the same type.
+  RegistrationProcessResponse _responseFromModel(
+    RegistrationProcess p, {
+    String companyName = '',
+    String advocateName = '',
+    String userName = '',
+  }) {
+    return RegistrationProcessResponse(
+      id: p.id,
+      companyId: p.companyId,
+      companyName: companyName,
+      advocateId: p.advocateId,
+      advocateName: advocateName,
+      userId: p.userId,
+      userName: userName,
+      status: p.status,
+      shareValuePerShare: p.shareValuePerShare,
+      steps: p.steps,
+    );
+  }
+
+  RegistrationProcessResponse? get _currentProcess {
+    if (_processes.isNotEmpty) return _processes.first;
+
+    final nested = _company?.registrationProcess;
+    if (nested == null) return null;
+
+    return _responseFromModel(
+      nested,
+      companyName: _company?.companyName ?? '',
+    );
+  }
+
+  bool get _hasProcess => _currentProcess != null;
+
+  bool get _isMineProcess {
+    final p = _currentProcess;
+    if (p == null) return false;
+    return p.userId == _userId;
+  }
 
   @override
   void initState() {
@@ -92,28 +152,37 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
       }
 
       final company = await _companyService.getCompanyById(widget.companyId);
-      
+
       final prefs = await SharedPreferences.getInstance();
       final currentUserId = prefs.getString('userId');
-      
+
       setState(() {
         _company = company;
         _isLoading = false;
-        _isCreator = currentUserId != null && 
-                     currentUserId.isNotEmpty && 
-                     company.creatorId == currentUserId;
+        _isCreator = currentUserId != null &&
+            currentUserId.isNotEmpty &&
+            company.creatorId == currentUserId;
+
+        _isCenterAdminOfThis = company.registrationProcess != null &&
+            currentUserId != null &&
+            currentUserId.isNotEmpty &&
+            company.registrationProcess!.userId == currentUserId;
+
         print('✅ Is Creator: $_isCreator');
+        print('✅ Is Center Admin (nested): $_isCenterAdminOfThis');
         print('✅ CreatorId: ${company.creatorId}');
         print('✅ CurrentUserId: $currentUserId');
       });
-      
+
+      // Load supporting data
       _loadContacts();
-      _loadProcesses();
-      
-      if (_isCreator) {
+      await _loadProcesses();
+
+      // Payments: creator OR center admin of this (either source)
+      if (_isCreator || _isCenterAdminOfThis || _isMineProcess) {
         _loadPayments();
       } else {
-        print('⏭️ Skipping payments - user is not the creator');
+        print('⏭️ Skipping payments - user is not creator or center admin');
       }
     } catch (e) {
       setState(() {
@@ -131,7 +200,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
     });
 
     try {
-      final contacts = await _contactService.getContactsByCompanyId(widget.companyId);
+      final contacts =
+          await _contactService.getContactsByCompanyId(widget.companyId);
       setState(() {
         _contacts = contacts;
         _isLoadingContacts = false;
@@ -152,7 +222,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
     });
 
     try {
-      final processes = await _processService.getProcessesByCompanyId(widget.companyId);
+      final processes =
+          await _processService.getProcessesByCompanyId(widget.companyId);
       setState(() {
         _processes = processes;
         _isLoadingProcesses = false;
@@ -173,7 +244,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
     });
 
     try {
-      final payments = await _paymentService.getPaymentsByCompanyId(widget.companyId);
+      final payments =
+          await _paymentService.getPaymentsByCompanyId(widget.companyId);
       setState(() {
         _payments = payments;
         _isLoadingPayments = false;
@@ -259,7 +331,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
       return;
     }
 
-    // Show confirmation dialog
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -325,7 +396,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
 
     if (confirm != true) return;
 
-    // Show loading
     setState(() {
       _isLoading = true;
     });
@@ -343,8 +413,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
             backgroundColor: Colors.green,
           ),
         );
-        
-        // Navigate back to previous screen
         Navigator.pop(context, true);
       } else {
         throw Exception('Failed to delete company');
@@ -360,6 +428,890 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
         ),
       );
     }
+  }
+
+  // ============================================================
+  // ADVOCATE PICKER
+  // ============================================================
+  Future<AdvocateBrief?> _pickAdvocate() async {
+    if (_userId == null || _userId!.isEmpty) return null;
+
+    List<AdvocateBrief> advocates;
+    try {
+      advocates = await CenterAdminBridge.myAdvocates(_userId!);
+    } catch (e) {
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load advocates: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return null;
+    }
+
+    if (!mounted) return null;
+
+    if (advocates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('You have no advocates connected. Please add one first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return null;
+    }
+
+    return showModalBottomSheet<AdvocateBrief>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Select an Advocate',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Pick the advocate who will handle this company',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: advocates.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, indent: 60),
+                  itemBuilder: (context, i) {
+                    final a = advocates[i];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.blue.withOpacity(0.1),
+                        child: const Icon(Icons.gavel,
+                            color: Colors.blue, size: 20),
+                      ),
+                      title: Text(
+                        a.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        'ID: ${a.id}',
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.grey.shade600),
+                      ),
+                      trailing: const Icon(Icons.chevron_right,
+                          color: Colors.grey),
+                      onTap: () => Navigator.pop(context, a),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ============================================================
+  // ACCEPT (as center admin) — pick advocate + share value
+  // ============================================================
+  Future<void> _confirmAcceptAsCenterAdmin() async {
+    // Step 1: Pick advocate
+    final advocate = await _pickAdvocate();
+    if (advocate == null) return;
+
+    // Step 2: Ask for share value per share (required by backend, must be > 0)
+    final shareValueController = TextEditingController(text: '100');
+
+    final shareValue = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Set Share Value'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the share value per share for this company registration.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: shareValueController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Share Value Per Share (BDT) *',
+                hintText: 'e.g. 100',
+                prefixIcon: const Icon(Icons.attach_money),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final v = double.tryParse(shareValueController.text.trim());
+              if (v == null || v <= 0) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a valid share value > 0'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(ctx, v);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+            child: const Text('Next'),
+          ),
+        ],
+      ),
+    );
+
+    shareValueController.dispose();
+    if (shareValue == null) return;
+
+    // Step 3: Confirm
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Accept as Center Admin?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'You will become the registration process controller for this company.',
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F7FA),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.gavel, size: 16, color: Colors.blue),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Advocate: ${advocate.name}',
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.attach_money,
+                          size: 16, color: Colors.blue),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Share Value: ৳${shareValue.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+            child: const Text('Accept'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isBusy = true);
+
+    try {
+      final process = RegistrationProcess(
+        companyId: widget.companyId,
+        advocateId: advocate.id,
+        userId: _userId!,
+        status: false,
+        shareValuePerShare: shareValue,
+        steps: const ['accepted'],
+      );
+
+      print('📤 Sending registration process payload:');
+      print(process.toJson());
+
+      await _processService.addRegistrationProcess(
+        process: process,
+        userId: _userId!,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration process accepted successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // ✅ Refresh both the company AND the process list so the buttons flip
+      await _loadCompanyDetails();
+      if (mounted) await _loadProcesses();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  // ============================================================
+  // REMOVE (delete the company entirely, when no process exists)
+  // ============================================================
+  Future<void> _confirmRemoveNoProcess() async {
+    await _deleteCompany();
+  }
+
+  // ============================================================
+  // UPDATE REGISTRATION PROCESS — step builder + local validation
+  // ============================================================
+  Future<void> _openEditRegistrationProcess() async {
+    // Use the same source-of-truth getter as the UI
+    final RegistrationProcessResponse? fresh = _currentProcess;
+
+    if (fresh == null) return;
+
+    // Convert to the writable model
+    final process = RegistrationProcess(
+      id: fresh.id,
+      companyId: fresh.companyId,
+      advocateId: fresh.advocateId,
+      userId: fresh.userId,
+      status: fresh.status,
+      shareValuePerShare: fresh.shareValuePerShare,
+      steps: fresh.steps,
+    );
+
+    // Guard: process.id MUST NOT be null/empty for update to work
+    print('🟪 [update] process.id = ${process.id}');
+    print('🟪 [update] process.companyId = ${process.companyId}');
+
+    if (process.id == null || process.id!.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Missing registration process ID — cannot update. '
+            'Please refresh and try again.',
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 6),
+        ),
+      );
+      return;
+    }
+
+    // Step controllers
+    final List<TextEditingController> stepControllers =
+        process.steps.map((s) => TextEditingController(text: s)).toList();
+    if (stepControllers.isEmpty) {
+      stepControllers.add(TextEditingController());
+    }
+
+    bool status = process.status;
+    final shareValueController = TextEditingController(
+      text: process.shareValuePerShare.toString(),
+    );
+
+    AdvocateBrief? selectedAdvocate = AdvocateBrief(
+      id: process.advocateId,
+      name: process.advocateId,
+    );
+
+    // Try to resolve advocate name
+    try {
+      final list = await CenterAdminBridge.myAdvocates(_userId ?? '');
+      for (final a in list) {
+        if (a.id == process.advocateId) {
+          selectedAdvocate = a;
+          break;
+        }
+      }
+    } catch (_) {}
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            void addStep() {
+              setLocal(() {
+                stepControllers.add(TextEditingController());
+              });
+            }
+
+            void removeStep(int index) {
+              if (stepControllers.length <= 1) return;
+              setLocal(() {
+                stepControllers[index].dispose();
+                stepControllers.removeAt(index);
+              });
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: const Text('Update Registration Process'),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Advocate
+                      const Text('Assigned Advocate',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      InkWell(
+                        onTap: () async {
+                          final picked = await _pickAdvocate();
+                          if (picked != null) {
+                            setLocal(() => selectedAdvocate = picked);
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F7FA),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.gavel,
+                                  size: 16, color: Colors.blue),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  selectedAdvocate?.name ?? 'Select advocate',
+                                  style: const TextStyle(fontSize: 13),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const Icon(Icons.arrow_drop_down),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Share value
+                      const Text('Share Value Per Share',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: shareValueController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          hintText: 'e.g. 100',
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Steps header
+                      Row(
+                        children: [
+                          const Text('Steps',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: addStep,
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('Add Step',
+                                style: TextStyle(fontSize: 12)),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 0),
+                              minimumSize: const Size(0, 32),
+                              foregroundColor: Colors.blue,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+
+                      // Steps
+                      ...List.generate(stepControllers.length, (i) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Step ${i + 1}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: stepControllers[i],
+                                  textInputAction: TextInputAction.next,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    hintText: 'Describe step ${i + 1}...',
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 12),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                tooltip: 'Remove step',
+                                icon: Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: stepControllers.length <= 1
+                                      ? Colors.grey.shade300
+                                      : Colors.red,
+                                ),
+                                onPressed: stepControllers.length <= 1
+                                    ? null
+                                    : () => removeStep(i),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+
+                      const SizedBox(height: 12),
+
+                      // Status
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                            'Mark as completed (status = true)'),
+                        value: status,
+                        onChanged: (v) => setLocal(() => status = v),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (saved != true) {
+      for (final c in stepControllers) {
+        c.dispose();
+      }
+      shareValueController.dispose();
+      return;
+    }
+
+    // Build final step list
+    final steps = <String>[];
+    for (final c in stepControllers) {
+      final v = c.text.trim();
+      if (v.isNotEmpty) steps.add(v);
+    }
+
+    // Parse share value with fallback
+    final shareValue =
+        double.tryParse(shareValueController.text.trim()) ??
+            process.shareValuePerShare;
+
+    // ✅ Local validation — avoids HTTP 400 from backend
+    if (shareValue <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Share value must be greater than 0'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      for (final c in stepControllers) {
+        c.dispose();
+      }
+      shareValueController.dispose();
+      return;
+    }
+
+    final advocateIdToSend = (selectedAdvocate?.id.isNotEmpty ?? false)
+        ? selectedAdvocate!.id
+        : process.advocateId;
+
+    if (advocateIdToSend.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an advocate'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      for (final c in stepControllers) {
+        c.dispose();
+      }
+      shareValueController.dispose();
+      return;
+    }
+
+    shareValueController.dispose();
+
+    final updated = RegistrationProcess(
+      id: process.id,
+      companyId: process.companyId,
+      advocateId: advocateIdToSend,
+      userId: process.userId,
+      status: status,
+      shareValuePerShare: shareValue,
+      steps: steps,
+    );
+
+    print('📤 [update] Payload: ${updated.toJson()}');
+
+    setState(() => _isBusy = true);
+
+    try {
+      await _processService.updateRegistrationProcess(
+        id: process.id ?? '',
+        process: updated,
+        userId: _userId!,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration process updated'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      await _loadCompanyDetails();
+      if (mounted) await _loadProcesses();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  // ============================================================
+  // DELETE REGISTRATION PROCESS
+  // ============================================================
+  Future<void> _confirmDeleteRegistrationProcess() async {
+    final process = _currentProcess;
+    if (process == null) return;
+
+    if (process.id == null || process.id!.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Missing registration process ID'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Registration Process?'),
+        content: const Text(
+          'This will remove your registration process for this company. '
+          'The company record itself will remain.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isBusy = true);
+
+    try {
+      await _processService.deleteRegistrationProcess(
+        id: process.id ?? '',
+        userId: _userId!,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration process deleted'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      await _loadCompanyDetails();
+      if (mounted) await _loadProcesses();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  // ============================================================
+  // OPEN "MY COMPANY PROCESSES"
+  // ============================================================
+  Future<void> _openMyCompanyProcessControlScreen() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CompanyProcessControlScreen(),
+      ),
+    );
+    if (mounted) await _loadCompanyDetails();
+  }
+
+  // ============================================================
+  // CENTER ADMIN SECTION (rendered on Company Details)
+  // ============================================================
+  Widget _buildCenterAdminControls() {
+    if (_company == null) return const SizedBox.shrink();
+
+    final hasProcess = _hasProcess;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.blue.withOpacity(0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.admin_panel_settings,
+                    color: Colors.blue, size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  'Center Admin Controls',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            OutlinedButton.icon(
+              onPressed: _openMyCompanyProcessControlScreen,
+              icon: const Icon(Icons.list_alt),
+              label: const Text('My Company Processes'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 46),
+                side: const BorderSide(color: Colors.blue),
+                foregroundColor: Colors.blue,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            if (!hasProcess) ...[
+              ElevatedButton.icon(
+                onPressed: _confirmAcceptAsCenterAdmin,
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Accept Registration Process'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 46),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _confirmRemoveNoProcess,
+                icon: const Icon(Icons.delete_forever_outlined),
+                label: const Text('Remove Registration'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 46),
+                  side: const BorderSide(color: Colors.red),
+                  foregroundColor: Colors.red,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ] else if (_isMineProcess) ...[
+              ElevatedButton.icon(
+                onPressed: _openEditRegistrationProcess,
+                icon: const Icon(Icons.edit_note),
+                label: const Text('Update Registration Process'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 46),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _confirmDeleteRegistrationProcess,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Delete Registration Process'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 46),
+                  side: const BorderSide(color: Colors.red),
+                  foregroundColor: Colors.red,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   // ✅ Show Send Payment Dialog
@@ -381,7 +1333,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Receiver Info
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -416,7 +1367,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                         ),
                         IconButton(
                           onPressed: () => _copyToClipboard(_receiverNumber),
-                          icon: const Icon(Icons.copy, size: 18, color: Colors.green),
+                          icon: const Icon(Icons.copy,
+                              size: 18, color: Colors.green),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
@@ -435,7 +1387,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              // Sender Phone Number
               TextField(
                 controller: _senderPhoneController,
                 keyboardType: TextInputType.phone,
@@ -447,7 +1398,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              // Transaction ID
               TextField(
                 controller: _transactionIdController,
                 decoration: const InputDecoration(
@@ -458,7 +1408,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              // Amount (pre-filled, optional to change)
               TextField(
                 controller: _amountController,
                 keyboardType: TextInputType.number,
@@ -478,7 +1427,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
+                    Icon(Icons.info_outline,
+                        size: 16, color: Colors.blue.shade700),
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
@@ -519,7 +1469,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
     final transactionId = _transactionIdController.text.trim();
     final amount = double.tryParse(_amountController.text.trim());
 
-    // Validate inputs
     if (senderPhone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -570,7 +1519,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
       return;
     }
 
-    // Show loading
     Navigator.pop(context);
 
     setState(() {
@@ -595,9 +1543,7 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
         ),
       );
 
-      // Refresh payments
       await _loadPayments();
-
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -624,14 +1570,12 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
         foregroundColor: Colors.white,
         elevation: 2,
         actions: [
-          // ✅ Edit Button - Only visible to creator
           if (_isCreator)
             IconButton(
               icon: const Icon(Icons.edit),
               onPressed: _navigateToEditCompany,
               tooltip: 'Edit Company',
             ),
-          // ✅ Delete Button - Only visible to creator
           if (_isCreator)
             IconButton(
               icon: const Icon(Icons.delete_outline),
@@ -639,7 +1583,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
               tooltip: 'Delete Company',
               color: Colors.red.shade300,
             ),
-          // ✅ Send Payment Button - Only visible to creator
           if (_isCreator)
             IconButton(
               icon: const Icon(Icons.payment),
@@ -653,7 +1596,7 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
           ),
         ],
       ),
-      body: _isLoading
+      body: (_isLoading || _isBusy)
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? _buildErrorWidget()
@@ -729,16 +1672,19 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
           const SizedBox(height: 16),
           _buildInfoCard(company),
           const SizedBox(height: 16),
-          if (company.directorsName != null && company.directorsName!.isNotEmpty)
+          if (company.directorsName != null &&
+              company.directorsName!.isNotEmpty)
             _buildDirectorsSection(company),
           const SizedBox(height: 16),
-          if (company.shareHoldersName != null && company.shareHoldersName!.isNotEmpty)
+          if (company.shareHoldersName != null &&
+              company.shareHoldersName!.isNotEmpty)
             _buildShareholdersSection(company),
           const SizedBox(height: 16),
           if (company.capitals != null && company.capitals!.isNotEmpty)
             _buildCapitalSection(company),
           const SizedBox(height: 16),
-          if (company.subscriptions != null && company.subscriptions!.isNotEmpty)
+          if (company.subscriptions != null &&
+              company.subscriptions!.isNotEmpty)
             _buildSubscriptionsSection(company),
           const SizedBox(height: 16),
           _buildDocumentsSection(company),
@@ -747,7 +1693,13 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
           const SizedBox(height: 16),
           _buildRegistrationProcessSection(),
           const SizedBox(height: 16),
-          if (_isCreator) _buildPaymentSection(),
+
+          // ✅ Center Admin Controls — uses _processes as source of truth
+          if (_isMineProcess || !_hasProcess) _buildCenterAdminControls(),
+
+          const SizedBox(height: 16),
+
+          if (_isCreator || _isMineProcess) _buildPaymentSection(),
         ],
       ),
     );
@@ -809,7 +1761,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
               ),
               if (_isCreator)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.green.withOpacity(0.8),
                     borderRadius: BorderRadius.circular(12),
@@ -837,10 +1790,13 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
             spacing: 8,
             runSpacing: 4,
             children: [
-              _buildHeaderTag(company.category ?? 'N/A', Colors.white.withOpacity(0.2)),
-              _buildHeaderTag(company.natureOfBusiness ?? 'N/A', Colors.white.withOpacity(0.2)),
+              _buildHeaderTag(
+                  company.category ?? 'N/A', Colors.white.withOpacity(0.2)),
+              _buildHeaderTag(company.natureOfBusiness ?? 'N/A',
+                  Colors.white.withOpacity(0.2)),
               if (company.creatorName != null)
-                _buildHeaderTag('Created by: ${company.creatorName}', Colors.white.withOpacity(0.2)),
+                _buildHeaderTag('Created by: ${company.creatorName}',
+                    Colors.white.withOpacity(0.2)),
             ],
           ),
         ],
@@ -888,8 +1844,10 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
             _buildInfoRow('ID', company.id ?? 'N/A'),
             _buildInfoRow('Type', company.type ?? 'N/A'),
             _buildInfoRow('Category', company.category ?? 'N/A'),
-            _buildInfoRow('Nature of Business', company.natureOfBusiness ?? 'N/A'),
-            if (company.officeRegistryId != null && company.officeRegistryId!.isNotEmpty)
+            _buildInfoRow(
+                'Nature of Business', company.natureOfBusiness ?? 'N/A'),
+            if (company.officeRegistryId != null &&
+                company.officeRegistryId!.isNotEmpty)
               _buildInfoRow('Office Registry ID', company.officeRegistryId!),
             _buildInfoRow('Authorized', company.authorized ?? 'N/A'),
             if (company.creatorName != null)
@@ -989,14 +1947,14 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
               ],
             ),
             const SizedBox(height: 8),
-            ...company.shareHoldersName!.map((name) => _buildPersonTile(name)),
+            ...company.shareHoldersName!
+                .map((name) => _buildPersonTile(name)),
           ],
         ),
       ),
     );
   }
 
-  // ✅ FIXED: _buildPersonTile now accepts nullable String
   Widget _buildPersonTile(String? name) {
     final displayName = name ?? 'Unknown';
     return Container(
@@ -1170,7 +2128,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
               ],
             ),
             const SizedBox(height: 8),
-            ...company.subscriptions!.map((sub) => _buildSubscriptionTile(sub)),
+            ...company.subscriptions!
+                .map((sub) => _buildSubscriptionTile(sub)),
           ],
         ),
       ),
@@ -1260,7 +2219,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.blue.shade100,
                     borderRadius: BorderRadius.circular(12),
@@ -1364,7 +2324,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.teal.shade100,
                     borderRadius: BorderRadius.circular(12),
@@ -1416,7 +2377,9 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                             ),
                           )
                         : Column(
-                            children: _contacts.map((contact) => _buildContactTile(contact)).toList(),
+                            children: _contacts
+                                .map((contact) => _buildContactTile(contact))
+                                .toList(),
                           ),
           ],
         ),
@@ -1491,7 +2454,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
               ),
             ],
           ),
-          if (contact.anyOtherMessage != null && contact.anyOtherMessage!.isNotEmpty)
+          if (contact.anyOtherMessage != null &&
+              contact.anyOtherMessage!.isNotEmpty)
             Row(
               children: [
                 Icon(Icons.message, size: 14, color: Colors.grey.shade600),
@@ -1537,7 +2501,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.orange.shade100,
                     borderRadius: BorderRadius.circular(12),
@@ -1589,7 +2554,9 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                             ),
                           )
                         : Column(
-                            children: _processes.map((process) => _buildProcessTile(process)).toList(),
+                            children: _processes
+                                .map((process) => _buildProcessTile(process))
+                                .toList(),
                           ),
           ],
         ),
@@ -1622,16 +2589,21 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: process.status ? Colors.green.shade100 : Colors.orange.shade100,
+                  color: process.status
+                      ? Colors.green.shade100
+                      : Colors.orange.shade100,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   process.status ? 'Completed' : 'In Progress',
                   style: TextStyle(
                     fontSize: 11,
-                    color: process.status ? Colors.green.shade700 : Colors.orange.shade700,
+                    color: process.status
+                        ? Colors.green.shade700
+                        : Colors.orange.shade700,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1658,7 +2630,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
             Wrap(
               spacing: 4,
               runSpacing: 2,
-              children: process.steps.map((step) => _buildStepChip(step)).toList(),
+              children:
+                  process.steps.map((step) => _buildStepChip(step)).toList(),
             ),
           ],
         ],
@@ -1708,7 +2681,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                 ),
                 const Spacer(),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.green.shade100,
                     borderRadius: BorderRadius.circular(12),
@@ -1724,31 +2698,30 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
               ],
             ),
             const SizedBox(height: 12),
-            
-            // ✅ Send Payment Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _showSendPaymentDialog,
-                icon: const Icon(Icons.send),
-                label: const Text(
-                  'Send Payment',
-                  style: TextStyle(fontSize: 16),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+
+            if (_isCreator)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _showSendPaymentDialog,
+                  icon: const Icon(Icons.send),
+                  label: const Text(
+                    'Send Payment',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // ✅ Fixed Payment Details Card
+
+            if (_isCreator) const SizedBox(height: 16),
+
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -1772,8 +2745,6 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  
-                  // Receiver Number
                   Row(
                     children: [
                       Container(
@@ -1813,15 +2784,13 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                       ),
                       IconButton(
                         onPressed: () => _copyToClipboard(_receiverNumber),
-                        icon: const Icon(Icons.copy, color: Colors.green, size: 20),
+                        icon: const Icon(Icons.copy,
+                            color: Colors.green, size: 20),
                         tooltip: 'Copy to clipboard',
                       ),
                     ],
                   ),
-                  
                   const Divider(),
-                  
-                  // Payment Amount
                   Row(
                     children: [
                       Container(
@@ -1862,10 +2831,7 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                       ),
                     ],
                   ),
-                  
                   const Divider(),
-                  
-                  // Note
                   Row(
                     children: [
                       Icon(
@@ -1888,10 +2854,9 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 12),
-            
-            // ✅ Payment History
+
             _isLoadingPayments
                 ? const Padding(
                     padding: EdgeInsets.all(16.0),
@@ -1946,7 +2911,8 @@ class _CompanyDetailsPageState extends State<CompanyDetailsPage> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              ..._payments.map((payment) => _buildPaymentTile(payment)),
+                              ..._payments.map(
+                                  (payment) => _buildPaymentTile(payment)),
                             ],
                           ),
           ],

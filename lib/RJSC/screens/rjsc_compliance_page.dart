@@ -1,147 +1,82 @@
-// lib/CompanyPages/company_services_page.dart
+// lib/RJSC/screens/rjsc_compliance_page.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../Auth/AuthService.dart';
 
-// ✅ আপনার main.dart থেকে এই পেজগুলোর import
-import 'company_registration_screen.dart';
-import 'my_company_page.dart';
-import 'all_companies_page.dart';              // ✅ নতুন — See All Companies এর জন্য
-import 'company_process_control_screen.dart';  // ✅ NEW — My Company Processes
-import '../DirectorsPages/director_list_page.dart';
-import '../ShareholderPages/shareholder_list_page.dart';
-import '../LogInPage/LogIn.dart';
+import 'rjsc_registration_screen.dart';
+import 'my_rjsc_page.dart';
+import 'all_rjsc_page.dart';
+import 'my_rjsc_process_control_screen.dart';
 
-class CompanyServicesPage extends StatelessWidget {
-  const CompanyServicesPage({super.key});
+class RjscServices extends StatelessWidget {
+  const RjscServices({super.key});
 
-  // ✅ এখন ৬টি অপশন
+  // ✅ ৪টি অপশন
   final List<Map<String, dynamic>> services = const [
     {
-      "title": "Company Registration",
-      "subtitle": "Register your new company",
-      "icon": Icons.business,
+      "title": "RJSC Compliance",
+      "subtitle": "Manage your RJSC compliance",
+      "icon": Icons.verified_user,
       "color": Color(0xFF0B5D36),
-      "action": "register_company",
+      "action": "rjsc_compliance",
     },
     {
-      "title": "My Companies",
-      "subtitle": "View and manage your companies",
-      "icon": Icons.business_center,
+      "title": "My RJSC",
+      "subtitle": "View and manage your RJSC filings",
+      "icon": Icons.folder_shared,
       "color": Color(0xFF1565C0),
-      "action": "my_companies",
+      "action": "my_rjsc",
     },
     {
-      "title": "See All Companies",
-      "subtitle": "Browse all registered companies",
+      "title": "All RJSC",
+      "subtitle": "Browse all registered RJSC records",
       "icon": Icons.apartment,
       "color": Color(0xFF00897B),
-      "action": "all_companies",
+      "action": "all_rjsc",
     },
+    // ✅ NEW: Center-admin-only view of RJSC filings they control
     {
-      "title": "See All Directors",
-      "subtitle": "Browse all registered directors",
-      "icon": Icons.people,
-      "color": Color(0xFF6A1B9A),
-      "action": "all_directors",
-    },
-    {
-      "title": "See All Shareholders",
-      "subtitle": "Browse all registered shareholders",
-      "icon": Icons.people_outline,
-      "color": Color(0xFFC62828),
-      "action": "all_shareholders",
-    },
-    // ✅ NEW: Center-Admin-only view of companies they control
-    {
-      "title": "My Company Processes",
-      "subtitle": "Manage company registrations you control as center admin",
+      "title": "My RJSC Processes",
+      "subtitle": "Manage RJSC filings you control as center admin",
       "icon": Icons.admin_panel_settings,
       "color": Color(0xFFE65100),
-      "action": "my_company_processes",
+      "action": "my_rjsc_processes",
     },
   ];
 
-  // ============ Handle OnTap ============
   Future<void> _handleTap(BuildContext context, String action) async {
-    // ✅ Token check — লগইন না থাকলে LogIn এ পাঠাবে
-    final token = await AuthService.getToken();
-    if (token == null || token.isEmpty) {
-      if (!context.mounted) return;
-      final result = await Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const LogIn()),
-      );
-      if (result == true && context.mounted) {
-        // লগইন সফল হলে আবার চেষ্টা করুন
-        _handleTap(context, action);
-      }
-      return;
-    }
-
-    // ✅ userId বের করুন
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('userId');
-
-    if (userId == null || userId.isEmpty) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please login first'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    if (!context.mounted) return;
-
-    // ✅ Action অনুযায়ী navigate
     switch (action) {
-      case 'register_company':
+      case "rjsc_compliance":
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => CompanyRegistrationScreen(userId: userId),
+            builder: (_) => const RjscRegistrationScreen(),
           ),
         );
         break;
 
-      case 'my_companies':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const MyCompanyPage()),
-        );
-        break;
-
-      case 'all_companies':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const AllCompaniesPage()),
-        );
-        break;
-
-      case 'all_directors':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const DirectorListPage()),
-        );
-        break;
-
-      case 'all_shareholders':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ShareholderListPage()),
-        );
-        break;
-
-      // ✅ NEW: My Company Processes
-      case 'my_company_processes':
+      case "my_rjsc":
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const CompanyProcessControlScreen(),
+            builder: (_) => const MyRjscPage(),
+          ),
+        );
+        break;
+
+      case "all_rjsc":
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const AllRjscPage(),
+          ),
+        );
+        break;
+
+      case "my_rjsc_processes":
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const MyRjscProcessControlScreen(),
           ),
         );
         break;
@@ -154,7 +89,7 @@ class CompanyServicesPage extends StatelessWidget {
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title: Text(
-          "Company Services",
+          "RJSC Compliance",
           style: GoogleFonts.poppins(
             color: Colors.black,
             fontWeight: FontWeight.bold,
@@ -184,7 +119,6 @@ class CompanyServicesPage extends StatelessWidget {
     );
   }
 
-  // ============ Service Card ============
   Widget _buildServiceCard(
     BuildContext context, {
     required String title,
@@ -211,7 +145,6 @@ class CompanyServicesPage extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Icon box
             Container(
               height: 55,
               width: 55,
@@ -222,8 +155,6 @@ class CompanyServicesPage extends StatelessWidget {
               child: Icon(icon, size: 28, color: color),
             ),
             const SizedBox(width: 16),
-
-            // Title + Subtitle
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -247,8 +178,6 @@ class CompanyServicesPage extends StatelessWidget {
                 ],
               ),
             ),
-
-            // Arrow
             Container(
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(

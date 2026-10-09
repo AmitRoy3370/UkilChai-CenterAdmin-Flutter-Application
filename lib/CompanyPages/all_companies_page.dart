@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../CompanyPages/company_service.dart';
 import '../CompanyPages/company_response.dart';
 import '../CompanyPages/company_details_page.dart';
+import '../CompanyPages/registration_process_service.dart';
+import '../CompanyPages/registration_process_response.dart';
 import '../Auth/AuthService.dart';
 
 class AllCompaniesPage extends StatefulWidget {
@@ -16,6 +18,8 @@ class AllCompaniesPage extends StatefulWidget {
 class _AllCompaniesPageState extends State<AllCompaniesPage>
     with SingleTickerProviderStateMixin {
   final CompanyService _companyService = CompanyService();
+  final RegistrationProcessService _processService =
+      RegistrationProcessService();
 
   // All companies as fetched from the server
   List<CompanyResponse> _allCompanies = [];
@@ -23,6 +27,9 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
   // Split lists
   List<CompanyResponse> _approvedCompanies = [];
   List<CompanyResponse> _pendingCompanies = [];
+
+  // Cached fresh status by companyId (from /registration-process/company/{id})
+  final Map<String, bool> _freshStatusByCompanyId = {};
 
   // Currently visible list (approved or pending depending on tab)
   List<CompanyResponse> _visibleCompanies = [];
@@ -64,13 +71,24 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
 
   // ============================================================
   // Helpers
+  //
+  // A company is "approved" only when:
+  //   1. it has a registration process (fresh status if available,
+  //      otherwise the nested one), AND
+  //   2. that process's status is true.
   // ============================================================
   bool _isApproved(CompanyResponse c) {
-    final hasRegistryId =
-        c.officeRegistryId != null && c.officeRegistryId!.isNotEmpty;
-    final isRegistered =
-        c.registrationProcess != null && c.registrationProcess!.status == true;
-    return hasRegistryId && isRegistered;
+    final cid = c.id ?? '';
+
+    // 1. Prefer the freshly-fetched status from /registration-process/company/{id}
+    if (_freshStatusByCompanyId.containsKey(cid)) {
+      return _freshStatusByCompanyId[cid] == true;
+    }
+
+    // 2. Fallback to the nested registration process from the company list
+    final nested = c.registrationProcess;
+    if (nested == null) return false;
+    return nested.status == true;
   }
 
   // ============================================================
@@ -80,6 +98,7 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
     setState(() {
       _isLoading = true;
       _error = null;
+      _freshStatusByCompanyId.clear();
     });
 
     try {
@@ -89,6 +108,33 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
       }
 
       final companies = await _companyService.getAllCompanies();
+
+      // ✅ Fetch the fresh registration-process status for EVERY company,
+      //    in parallel. This guarantees the approved/pending split is
+      //    accurate even if the nested registrationProcess in the list
+      //    response is stale.
+      final futures = <Future<void>>[];
+      for (final c in companies) {
+        final cid = c.id;
+        if (cid == null || cid.isEmpty) continue;
+
+        futures.add(
+          _processService
+              .getProcessesByCompanyId(cid)
+              .then((procs) {
+            if (procs.isEmpty) {
+              _freshStatusByCompanyId[cid] = false;
+            } else {
+              _freshStatusByCompanyId[cid] = procs.first.status == true;
+            }
+          })
+              .catchError((_) {
+            // On error, leave the map entry absent so we fall back
+            // to the nested status in _isApproved().
+          }),
+        );
+      }
+      await Future.wait(futures);
 
       // Split into approved / pending
       final approved = <CompanyResponse>[];
@@ -220,8 +266,8 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
     _applyFilters();
   }
 
-  void _navigateToCompanyDetail(String companyId) {
-    Navigator.push(
+  Future<void> _navigateToCompanyDetail(String companyId) async {
+    await Navigator.push(
       context,
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) {
@@ -239,6 +285,10 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
         transitionDuration: const Duration(milliseconds: 400),
       ),
     );
+
+    // Refresh the list so any status change (accept / approve / delete)
+    // from the details page is reflected here immediately.
+    if (mounted) await _loadCompanies();
   }
 
   // ============================================================
@@ -332,7 +382,8 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
                   itemCount: _visibleCompanies.length,
                   itemBuilder: (context, index) {
                     final company = _visibleCompanies[index];
-                    return _buildCompanyCard(company, isApproved: isApprovedTab);
+                    return _buildCompanyCard(company,
+                        isApproved: isApprovedTab);
                   },
                 ),
         ),
@@ -401,8 +452,8 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
           const SizedBox(height: 8),
           Text(
             isApprovedTab
-                ? 'Only companies with complete registration are shown.'
-                : 'Companies awaiting registry approval are shown here.',
+                ? 'Only companies with a completed registration process are shown.'
+                : 'Companies awaiting completion of their registration process are shown here.',
             style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
           ),
         ],
@@ -604,7 +655,7 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
             children: [
               Text(
                 '${_visibleCompanies.length} '
-                '${isApprovedTab ? 'registered' : 'pending'} '
+                '${isApprovedTab ? 'approved' : 'pending'} '
                 'compan${_visibleCompanies.length != 1 ? 'ies' : 'y'}',
                 style: TextStyle(
                   color: Colors.grey.shade600,
@@ -640,7 +691,7 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      isApprovedTab ? 'Verified' : 'Pending',
+                      isApprovedTab ? 'Approved' : 'Pending',
                       style: TextStyle(
                         fontSize: 11,
                         color: isApprovedTab
@@ -757,7 +808,7 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
                           ),
                           const SizedBox(width: 2),
                           Text(
-                            isApproved ? 'REG' : 'PENDING',
+                            isApproved ? 'APPROVED' : 'PENDING',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 8,
@@ -842,7 +893,7 @@ class _AllCompaniesPageState extends State<AllCompaniesPage>
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              isApproved ? 'Registered' : 'Pending',
+                              isApproved ? 'Approved' : 'Pending',
                               style: TextStyle(
                                 fontSize: 10,
                                 color: isApproved

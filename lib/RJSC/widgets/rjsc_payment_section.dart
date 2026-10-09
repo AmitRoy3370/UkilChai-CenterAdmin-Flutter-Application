@@ -10,6 +10,7 @@ class RjscPaymentSection extends StatefulWidget {
   final String senderUserId;
   final String senderUserName;
   final String senderPhoneNumber;
+  final bool canPay;
 
   const RjscPaymentSection({
     super.key,
@@ -17,6 +18,7 @@ class RjscPaymentSection extends StatefulWidget {
     required this.senderUserId,
     required this.senderUserName,
     required this.senderPhoneNumber,
+    this.canPay = true,
   });
 
   @override
@@ -516,35 +518,37 @@ class _RjscPaymentSectionState extends State<RjscPaymentSection> {
           ..._payments.map((p) => _paymentHistoryTile(p)),
         ],
 
-        // ---- Pay Button ----
-        const SizedBox(height: 14),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _isFullyPaid ? null : _openPaymentDialog,
-            icon: Icon(
-              _isFullyPaid ? Icons.check_circle : Icons.payment,
-              size: 18,
-            ),
-            label: Text(
-              _isFullyPaid
-                  ? 'Payment Completed'
-                  : 'Pay ৳${_remaining.toStringAsFixed(0)}',
-              style: GoogleFonts.inter(
-                  fontSize: 14, fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _primaryGreen,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: const Color(0xFFCBD5E1),
-              disabledForegroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+        // ---- Pay Button (owner only) ----
+        if (widget.canPay) ...[
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isFullyPaid ? null : _openPaymentDialog,
+              icon: Icon(
+                _isFullyPaid ? Icons.check_circle : Icons.payment,
+                size: 18,
+              ),
+              label: Text(
+                _isFullyPaid
+                    ? 'Payment Completed'
+                    : 'Pay ৳${_remaining.toStringAsFixed(0)}',
+                style: GoogleFonts.inter(
+                    fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryGreen,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFCBD5E1),
+                disabledForegroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ],
     );
   }

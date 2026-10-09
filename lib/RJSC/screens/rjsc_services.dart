@@ -5,11 +5,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'rjsc_registration_screen.dart';
 import 'my_rjsc_page.dart';    // ✅ নতুন
 import 'all_rjsc_page.dart';   // ✅ নতুন
+import 'my_rjsc_process_control_screen.dart'; // ✅ NEW
 
 class RjscServices extends StatelessWidget {
   const RjscServices({super.key});
 
-  // ✅ ৩টি অপশন
+  // ✅ এখন ৪টি অপশন
   final List<Map<String, dynamic>> services = const [
     {
       "title": "RJSC Compliance",
@@ -31,6 +32,14 @@ class RjscServices extends StatelessWidget {
       "icon": Icons.apartment,
       "color": Color(0xFF00897B),
       "action": "all_rjsc",
+    },
+    // ✅ NEW: Center-admin-only view of RJSC filings they control
+    {
+      "title": "My RJSC Processes",
+      "subtitle": "Manage RJSC filings you control as center admin",
+      "icon": Icons.admin_panel_settings,
+      "color": Color(0xFFE65100),
+      "action": "my_rjsc_processes",
     },
   ];
 
@@ -62,6 +71,16 @@ class RjscServices extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => const AllRjscPage(),
+          ),
+        );
+        break;
+
+      // ✅ NEW: My RJSC Processes
+      case "my_rjsc_processes":
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const MyRjscProcessControlScreen(),
           ),
         );
         break;

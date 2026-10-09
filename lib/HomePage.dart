@@ -27,6 +27,7 @@ import '../QuestionPages/QuestionListPage.dart';
 import '../RegistrationPage/gender.dart';
 import '../LogInPage/LogIn.dart';
 import '../HomePage/QuickConnect.dart';
+import '../CompanyPages/registration_process_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -46,6 +47,11 @@ class _HomePageState extends State<HomePage> {
   List<CompanyResponse> _companies = [];
   bool _isLoadingCompanies = true;
   String? _companyError;
+
+  // ✅ Registration process service — used by _loadCompanies() to fetch
+  //    the fresh `status` for each company.
+  final RegistrationProcessService _processService =
+      RegistrationProcessService();
 
   final List<String> allLocations = [
     'Bagerhat', 'Bandarban', 'Barguna', 'Barisal', 'Bhola', 'Bogra',
@@ -119,26 +125,74 @@ class _HomePageState extends State<HomePage> {
   // ============================================================
   // Companies
   // ============================================================
+  //
+  // Approval rule (matches all_companies_page / my_company_page):
+  //   A company is "approved" only when:
+  //     1. it has a registration process (fresh status if available,
+  //        otherwise the nested one), AND
+  //     2. that process's status is true.
+  //
+  // We fetch the fresh `registrationProcess.status` for every company
+  // from /registration-process/company/{id} so a stale nested
+  // `registrationProcess` in the list response can't misclassify
+  // a company.
+  // ============================================================
   Future<void> _loadCompanies() async {
     final prefs = await SharedPreferences.getInstance();
     final cachedJson = prefs.getString('cached_companies');
 
-    List<CompanyResponse> filterRegistered(List<CompanyResponse> companies) {
-      return companies.where((company) {
-        final hasRegistryId = company.officeRegistryId != null &&
-            company.officeRegistryId!.isNotEmpty;
-        final isRegistered = company.registrationProcess != null &&
-            company.registrationProcess!.status == true;
-        return hasRegistryId && isRegistered;
-      }).toList();
+    // Build the fresh-status map, then filter.
+    Future<List<CompanyResponse>> filterRegistered(
+      List<CompanyResponse> companies,
+    ) async {
+      // 1) Fetch fresh status for every company (in parallel).
+      final freshStatus = <String, bool>{};
+
+      final futures = <Future<void>>[];
+      for (final c in companies) {
+        final cid = c.id;
+        if (cid == null || cid.isEmpty) continue;
+
+        futures.add(
+          _processService
+              .getProcessesByCompanyId(cid)
+              .then((procs) {
+            if (procs.isEmpty) {
+              freshStatus[cid] = false;
+            } else {
+              freshStatus[cid] = procs.first.status == true;
+            }
+          })
+              .catchError((_) {
+            // On error, leave it absent → fall back to nested.
+          }),
+        );
+      }
+      await Future.wait(futures);
+
+      // 2) Apply the strict rule: process exists AND status == true.
+      bool isApproved(CompanyResponse c) {
+        final cid = c.id ?? '';
+
+        if (freshStatus.containsKey(cid)) {
+          return freshStatus[cid] == true;
+        }
+
+        final nested = c.registrationProcess;
+        if (nested == null) return false;
+        return nested.status == true;
+      }
+
+      return companies.where(isApproved).toList();
     }
 
+    // ── Show cached (best-effort) result first ─────────────────
     if (cachedJson != null) {
       try {
         final allCached = (jsonDecode(cachedJson) as List)
             .map((e) => CompanyResponse.fromJson(e))
             .toList();
-        final cached = filterRegistered(allCached);
+        final cached = await filterRegistered(allCached);
 
         if (!mounted) return;
         setState(() {
@@ -150,9 +204,10 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
+    // ── Then refresh from network ─────────────────────────────
     try {
       final allCompanies = await CompanyService().getAllCompanies();
-      final registeredCompanies = filterRegistered(allCompanies);
+      final registeredCompanies = await filterRegistered(allCompanies);
 
       await prefs.setString(
         'cached_companies',

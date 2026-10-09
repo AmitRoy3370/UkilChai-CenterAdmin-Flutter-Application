@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../CompanyPages/company_service.dart';
 import '../CompanyPages/company_response.dart';
 import '../CompanyPages/company_details_page.dart';
+import '../CompanyPages/registration_process_service.dart';
 import '../Auth/AuthService.dart';
 
 class MyCompanyPage extends StatefulWidget {
@@ -13,15 +14,25 @@ class MyCompanyPage extends StatefulWidget {
   State<MyCompanyPage> createState() => _MyCompanyPageState();
 }
 
-class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProviderStateMixin {
+class _MyCompanyPageState extends State<MyCompanyPage>
+    with SingleTickerProviderStateMixin {
   final CompanyService _companyService = CompanyService();
+  final RegistrationProcessService _processService =
+      RegistrationProcessService();
+
   List<CompanyResponse> _allCompanies = [];
   List<CompanyResponse> _registeredCompanies = [];
   List<CompanyResponse> _unregisteredCompanies = [];
+
+  /// Fresh `registrationProcess.status` per companyId, fetched from
+  /// `/registration-process/company/{id}`. Falls back to the nested value
+  /// in the company response if the fetch failed or hasn't run yet.
+  final Map<String, bool> _freshStatusByCompanyId = {};
+
   bool _isLoading = true;
   String? _error;
   String? _userId;
-  
+
   late TabController _tabController;
 
   @override
@@ -41,11 +52,11 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
     try {
       final prefs = await SharedPreferences.getInstance();
       String? userId = prefs.getString('userId');
-      
+
       if (userId == null || userId.isEmpty) {
         userId = await AuthService.getUserId();
       }
-      
+
       if (userId != null && userId.isNotEmpty) {
         setState(() {
           _userId = userId;
@@ -65,10 +76,32 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
     }
   }
 
+  // ============================================================
+  // A company is "approved" only when:
+  //   1. it has a registration process, AND
+  //   2. that process's status is true.
+  //
+  // We prefer the freshly-fetched status from
+  // /registration-process/company/{id} (see _loadCompanies) and fall
+  // back to the nested `registrationProcess` from the company response.
+  // ============================================================
+  bool _isApproved(CompanyResponse c) {
+    final cid = c.id ?? '';
+
+    if (_freshStatusByCompanyId.containsKey(cid)) {
+      return _freshStatusByCompanyId[cid] == true;
+    }
+
+    final nested = c.registrationProcess;
+    if (nested == null) return false;
+    return nested.status == true;
+  }
+
   Future<void> _loadCompanies(String userId) async {
     setState(() {
       _isLoading = true;
       _error = null;
+      _freshStatusByCompanyId.clear();
     });
 
     try {
@@ -78,21 +111,44 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
       }
 
       final companies = await _companyService.getCompaniesByCreatorId(userId);
-      
-      // Separate registered and unregistered companies
-      final registered = companies.where((company) {
-        final hasRegistryId = company.officeRegistryId != null && 
-                              company.officeRegistryId!.isNotEmpty;
-        final isRegistered = company.registrationProcess?.status == true;
-        return hasRegistryId && isRegistered;
-      }).toList();
 
-      final unregistered = companies.where((company) {
-        final hasRegistryId = company.officeRegistryId != null && 
-                              company.officeRegistryId!.isNotEmpty;
-        final isRegistered = company.registrationProcess?.status == true;
-        return !hasRegistryId || !isRegistered;
-      }).toList();
+      // ✅ Fetch the fresh registration-process status for every company,
+      //    in parallel, so the split is accurate even when the nested
+      //    `registrationProcess` in the list response is stale.
+      final futures = <Future<void>>[];
+      for (final c in companies) {
+        final cid = c.id;
+        if (cid == null || cid.isEmpty) continue;
+
+        futures.add(
+          _processService
+              .getProcessesByCompanyId(cid)
+              .then((procs) {
+            if (procs.isEmpty) {
+              _freshStatusByCompanyId[cid] = false;
+            } else {
+              _freshStatusByCompanyId[cid] = procs.first.status == true;
+            }
+          })
+              .catchError((_) {
+            // On error, leave the map entry absent so we fall back
+            // to the nested status in _isApproved().
+          }),
+        );
+      }
+      await Future.wait(futures);
+
+      // Split using the strict rule
+      final registered = <CompanyResponse>[];
+      final unregistered = <CompanyResponse>[];
+
+      for (final c in companies) {
+        if (_isApproved(c)) {
+          registered.add(c);
+        } else {
+          unregistered.add(c);
+        }
+      }
 
       setState(() {
         _allCompanies = companies;
@@ -108,13 +164,19 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
     }
   }
 
-  void _navigateToCompanyDetail(String companyId) {
-    Navigator.push(
+  Future<void> _navigateToCompanyDetail(String companyId) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => CompanyDetailsPage(companyId: companyId),
       ),
     );
+
+    // Refresh so any status change (accept / approve / delete) from the
+    // details page is reflected here immediately.
+    if (mounted && _userId != null) {
+      await _loadCompanies(_userId!);
+    }
   }
 
   @override
@@ -133,14 +195,14 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
-          tabs: const [
+          tabs: [
             Tab(
-              icon: Icon(Icons.check_circle),
-              text: 'Registered',
+              icon: const Icon(Icons.check_circle),
+              text: 'Approved (${_registeredCompanies.length})',
             ),
             Tab(
-              icon: Icon(Icons.pending),
-              text: 'Pending',
+              icon: const Icon(Icons.pending),
+              text: 'Pending (${_unregisteredCompanies.length})',
             ),
           ],
         ),
@@ -150,6 +212,8 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
             onPressed: () {
               if (_userId != null) {
                 _loadCompanies(_userId!);
+              } else {
+                _loadUserId();
               }
             },
           ),
@@ -162,8 +226,10 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
               : TabBarView(
                   controller: _tabController,
                   children: [
-                    _buildCompanyList(_registeredCompanies, isRegistered: true),
-                    _buildCompanyList(_unregisteredCompanies, isRegistered: false),
+                    _buildCompanyList(_registeredCompanies,
+                        isRegistered: true),
+                    _buildCompanyList(_unregisteredCompanies,
+                        isRegistered: false),
                   ],
                 ),
     );
@@ -202,20 +268,25 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
     );
   }
 
-  Widget _buildCompanyList(List<CompanyResponse> companies, {required bool isRegistered}) {
+  Widget _buildCompanyList(List<CompanyResponse> companies,
+      {required bool isRegistered}) {
     if (companies.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              isRegistered ? Icons.check_circle_outline : Icons.pending_outlined,
+              isRegistered
+                  ? Icons.check_circle_outline
+                  : Icons.pending_outlined,
               size: 80,
               color: Colors.grey.shade400,
             ),
             const SizedBox(height: 16),
             Text(
-              isRegistered ? 'No Registered Companies' : 'No Pending Companies',
+              isRegistered
+                  ? 'No Approved Companies'
+                  : 'No Pending Companies',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -224,9 +295,9 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
             ),
             const SizedBox(height: 8),
             Text(
-              isRegistered 
-                  ? 'You don\'t have any registered companies yet.' 
-                  : 'All your companies are registered.',
+              isRegistered
+                  ? 'You don\'t have any approved companies yet.'
+                  : 'All your companies are approved.',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey.shade500,
@@ -247,9 +318,12 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
     );
   }
 
-  Widget _buildCompanyCard(CompanyResponse company, {required bool isRegistered}) {
-    final cardColor = isRegistered ? Colors.green.shade50 : Colors.orange.shade50;
-    final borderColor = isRegistered ? Colors.green.shade200 : Colors.orange.shade200;
+  Widget _buildCompanyCard(CompanyResponse company,
+      {required bool isRegistered}) {
+    final cardColor =
+        isRegistered ? Colors.green.shade50 : Colors.orange.shade50;
+    final borderColor =
+        isRegistered ? Colors.green.shade200 : Colors.orange.shade200;
 
     return GestureDetector(
       onTap: () {
@@ -317,17 +391,22 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: isRegistered ? Colors.green.shade100 : Colors.orange.shade100,
+                            color: isRegistered
+                                ? Colors.green.shade100
+                                : Colors.orange.shade100,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Text(
-                            isRegistered ? 'Registered' : 'Pending',
+                            isRegistered ? 'Approved' : 'Pending',
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
-                              color: isRegistered ? Colors.green.shade700 : Colors.orange.shade700,
+                              color: isRegistered
+                                  ? Colors.green.shade700
+                                  : Colors.orange.shade700,
                             ),
                           ),
                         ),
@@ -339,14 +418,26 @@ class _MyCompanyPageState extends State<MyCompanyPage> with SingleTickerProvider
                       spacing: 4,
                       runSpacing: 4,
                       children: [
-                        if (company.category != null && company.category!.isNotEmpty)
+                        if (company.category != null &&
+                            company.category!.isNotEmpty)
                           _buildTag(company.category!, Colors.blue),
-                        if (company.directorsName != null && company.directorsName!.isNotEmpty)
-                          _buildTag('${company.directorsName!.length} Directors', Colors.purple),
-                        if (company.shareHoldersName != null && company.shareHoldersName!.isNotEmpty)
-                          _buildTag('${company.shareHoldersName!.length} Shareholders', Colors.orange),
-                        if (isRegistered && company.officeRegistryId != null)
-                          _buildTag('ID: ${company.officeRegistryId}', Colors.green),
+                        if (company.directorsName != null &&
+                            company.directorsName!.isNotEmpty)
+                          _buildTag(
+                            '${company.directorsName!.length} Directors',
+                            Colors.purple,
+                          ),
+                        if (company.shareHoldersName != null &&
+                            company.shareHoldersName!.isNotEmpty)
+                          _buildTag(
+                            '${company.shareHoldersName!.length} Shareholders',
+                            Colors.orange,
+                          ),
+                        if (isRegistered &&
+                            company.officeRegistryId != null &&
+                            company.officeRegistryId!.isNotEmpty)
+                          _buildTag(
+                              'ID: ${company.officeRegistryId}', Colors.green),
                       ],
                     ),
                   ],

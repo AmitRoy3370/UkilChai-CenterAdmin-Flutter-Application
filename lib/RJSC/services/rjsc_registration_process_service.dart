@@ -1,9 +1,9 @@
 // lib/RJSC/services/rjsc_registration_process_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:advocatechai/Auth/AuthService.dart';
+import '../../Auth/AuthService.dart';
 import '../models/rjsc_registration_process_model.dart';
-import 'package:advocatechai/Utils/BaseURL.dart' as BASE_URL;
+import '../../Utils/BaseURL.dart' as BASE_URL;
 
 class RjscRegistrationProcessService {
   static String _baseUrl =
