@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'trade_license_registration_screen.dart';
 import 'my_trade_license_screen.dart';
 import 'all_trade_license_screen.dart';
+import 'my_trade_license_process_control_screen.dart'; // ✅ NEW
 
 class TradeLicenseServiceSelectionScreen extends StatelessWidget {
   const TradeLicenseServiceSelectionScreen({super.key});
@@ -65,6 +66,23 @@ class TradeLicenseServiceSelectionScreen extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (_) => const AllTradeLicenseScreen(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // ✅ NEW: My Trade License Processes
+              _card(
+                context,
+                icon: Icons.assignment_ind,
+                color: const Color(0xFF0B5D36),
+                title: 'My Trade License Processes',
+                subtitle:
+                    'Manage trade license filings assigned to you',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const MyTradeLicenseProcessControlScreen(),
                   ),
                 ),
               ),

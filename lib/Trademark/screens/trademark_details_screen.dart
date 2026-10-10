@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import '../../Auth/AuthService.dart';
 import '../../ChatRelatedPages/FreeConsultantPage.dart';
 import '../../RJSC/screens/rjsc_attachment_viewer.dart';
+import '../../Vat/service/center_admin_bridge.dart'; // ✅ for AdvocateBrief
 import '../models/trademark_response_dto.dart';
 import '../models/trademark_model.dart';
+import '../models/trademark_registration_process_model.dart';
 import '../services/trademark_service.dart';
+import '../services/trademark_registration_process_service.dart';
 import 'trademark_update_screen.dart';
 import 'widgets/trademark_payment_section.dart';
+import 'my_trademark_process_control_screen.dart'; // ✅ NEW
 
 class TrademarkDetailsScreen extends StatefulWidget {
   final TrademarkResponse trademark;
@@ -21,14 +25,30 @@ class TrademarkDetailsScreen extends StatefulWidget {
   });
 
   @override
-  State<TrademarkDetailsScreen> createState() => _TrademarkDetailsScreenState();
+  State<TrademarkDetailsScreen> createState() =>
+      _TrademarkDetailsScreenState();
 }
 
 class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
+  static const Color _primaryPurple = Color(0xFF6A1B9A);
+
   late TrademarkResponse _t;
   bool _isDeleting = false;
+  bool _isBusy = false;
   String? _currentUserId;
   String? _currentUserName;
+
+  /// ✅ True when current user is the Center Admin of THIS Trademark's process
+  ///    (i.e. registrationProcess.centerAdminUserId == currentUserId)
+  bool get _isCenterAdminOfThis {
+    final rp = _t.registrationProcess;
+    return rp != null &&
+        _currentUserId != null &&
+        _currentUserId!.isNotEmpty &&
+        rp.centerAdminUserId == _currentUserId;
+  }
+
+  bool get _hasProcess => _t.registrationProcess != null;
 
   @override
   void initState() {
@@ -46,6 +66,16 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
     });
   }
 
+  Future<void> _reload() async {
+    if (_t.id == null) return;
+    try {
+      final res = await TrademarkService.findById(_t.id!);
+      final fresh = TrademarkService.parseSingle(res);
+      if (fresh != null && mounted) setState(() => _t = fresh);
+    } catch (_) {}
+  }
+
+  // ============ DELETE (whole Trademark) ============
   Future<void> _confirmDelete() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -96,6 +126,7 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
     }
   }
 
+  // ============ EDIT ============
   Future<void> _openEdit() async {
     final model = TrademarkModel(
       id: _t.id,
@@ -121,6 +152,520 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
       ),
     );
     if (changed == true && mounted) Navigator.pop(context, true);
+  }
+
+  // ============ ACCEPT PROCESS ============
+  Future<void> _confirmAccept() async {
+    final advocate = await _pickAdvocate();
+    if (advocate == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Accept as Center Admin?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'You will become the registration process controller for this Trademark filing.',
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5F7FA),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.gavel,
+                      size: 16, color: _primaryPurple),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Assigned Advocate: ${advocate.name}',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryPurple),
+            child: const Text('Accept'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isBusy = true);
+    try {
+      final process = TrademarkRegistrationProcessModel(
+        userId: _currentUserId!,
+        advocateId: advocate.id,
+        tradeMarkId: _t.id ?? '',
+        status: false,
+        steps: const ['accepted'],
+      );
+
+      await TrademarkRegistrationProcessService.addProcess(
+        userId: _currentUserId!,
+        process: process,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Trademark registration process accepted successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      _snack('Failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  // ============ UPDATE PROCESS ============
+  Future<void> _openEditProcess() async {
+    final process = _t.registrationProcess;
+    if (process == null) return;
+
+    final stepControllers = process.steps
+        .map((s) => TextEditingController(text: s))
+        .toList();
+    if (stepControllers.isEmpty) stepControllers.add(TextEditingController());
+
+    bool status = process.status;
+
+    AdvocateBrief? selectedAdvocate = AdvocateBrief(
+      id: process.advocateId,
+      name: process.advocateName.isNotEmpty
+          ? process.advocateName
+          : process.advocateId,
+    );
+
+    try {
+      final list = await CenterAdminBridge.myAdvocates(_currentUserId ?? '');
+      for (final a in list) {
+        if (a.id == process.advocateId) {
+          selectedAdvocate = a;
+          break;
+        }
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            void addStep() => setLocal(
+                () => stepControllers.add(TextEditingController()));
+
+            void removeStep(int i) {
+              if (stepControllers.length <= 1) return;
+              setLocal(() {
+                stepControllers[i].dispose();
+                stepControllers.removeAt(i);
+              });
+            }
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              title: const Text('Update Trademark Process'),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.75),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Assigned Advocate',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      InkWell(
+                        onTap: () async {
+                          final picked = await _pickAdvocate();
+                          if (picked != null) {
+                            setLocal(() => selectedAdvocate = picked);
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F7FA),
+                            borderRadius: BorderRadius.circular(10),
+                            border:
+                                Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.gavel,
+                                  size: 16, color: _primaryPurple),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  selectedAdvocate?.name ??
+                                      'Select advocate',
+                                  style: const TextStyle(fontSize: 13),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const Icon(Icons.arrow_drop_down),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          const Text('Steps',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: addStep,
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('Add Step',
+                                style: TextStyle(fontSize: 12)),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 0),
+                              minimumSize: const Size(0, 32),
+                              foregroundColor: _primaryPurple,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ...List.generate(stepControllers.length, (i) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: _primaryPurple.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  'Step ${i + 1}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: _primaryPurple,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: TextField(
+                                  controller: stepControllers[i],
+                                  textInputAction: TextInputAction.next,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    hintText: 'Describe step ${i + 1}...',
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 12),
+                                    border: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                tooltip: 'Remove step',
+                                icon: Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: stepControllers.length <= 1
+                                      ? Colors.grey.shade300
+                                      : Colors.red,
+                                ),
+                                onPressed: stepControllers.length <= 1
+                                    ? null
+                                    : () => removeStep(i),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                            'Mark as completed (status = true)'),
+                        value: status,
+                        onChanged: (v) => setLocal(() => status = v),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: _primaryPurple),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (saved != true) {
+      for (final c in stepControllers) {
+        c.dispose();
+      }
+      return;
+    }
+
+    final steps = <String>[];
+    for (final c in stepControllers) {
+      final v = c.text.trim();
+      if (v.isNotEmpty) steps.add(v);
+    }
+
+    final updated = TrademarkRegistrationProcessModel(
+      id: process.id,
+      userId: process.centerAdminUserId,
+      advocateId: selectedAdvocate?.id ?? process.advocateId,
+      tradeMarkId: _t.id ?? '',
+      status: status,
+      steps: steps,
+    );
+
+    setState(() => _isBusy = true);
+    try {
+      await TrademarkRegistrationProcessService.updateProcess(
+        id: process.id ?? '',
+        userId: _currentUserId!,
+        process: updated,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Trademark process updated'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      _snack('Failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  // ============ DELETE PROCESS ============
+  Future<void> _confirmDeleteProcess() async {
+    final process = _t.registrationProcess;
+    if (process == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Trademark Process?'),
+        content: const Text(
+          'This will remove your registration process for this Trademark filing. '
+          'The Trademark record itself will remain.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isBusy = true);
+    try {
+      await TrademarkRegistrationProcessService.deleteProcess(
+        id: process.id ?? '',
+        userId: _currentUserId!,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Trademark process deleted'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      _snack('Failed: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  // ============ OPEN MY TM PROCESS CONTROL ============
+  Future<void> _openMyTmProcessControl() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const MyTrademarkProcessControlScreen(),
+      ),
+    );
+    if (mounted) await _reload();
+  }
+
+  // ============ ADVOCATE PICKER ============
+  Future<AdvocateBrief?> _pickAdvocate() async {
+    if (_currentUserId == null || _currentUserId!.isEmpty) return null;
+
+    List<AdvocateBrief> advocates;
+    try {
+      advocates = await CenterAdminBridge.myAdvocates(_currentUserId!);
+    } catch (e) {
+      if (!mounted) return null;
+      _snack('Failed to load advocates: $e', isError: true);
+      return null;
+    }
+
+    if (!mounted) return null;
+
+    if (advocates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('You have no advocates connected. Please add one first.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return null;
+    }
+
+    return showModalBottomSheet<AdvocateBrief>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Select an Advocate',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Pick the advocate who will handle this Trademark filing',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: advocates.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, indent: 60),
+                  itemBuilder: (context, i) {
+                    final a = advocates[i];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: _primaryPurple.withOpacity(0.1),
+                        child: const Icon(Icons.gavel,
+                            color: _primaryPurple, size: 20),
+                      ),
+                      title: Text(
+                        a.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        'ID: ${a.id}',
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.grey.shade600),
+                      ),
+                      trailing: const Icon(Icons.chevron_right,
+                          color: Colors.grey),
+                      onTap: () => Navigator.pop(context, a),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _openDocument(String attachmentId) async {
@@ -159,6 +704,17 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
     );
   }
 
+  void _snack(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red : _primaryPurple,
+      ),
+    );
+  }
+
+  // ============ BUILD ============
   @override
   Widget build(BuildContext context) {
     final process = _t.registrationProcess;
@@ -209,7 +765,7 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
             ),
         ],
       ),
-      body: _isDeleting
+      body: (_isDeleting || _isBusy)
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -276,12 +832,19 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
                     if (_t.id != null) _row('Application ID', _t.id!),
                   ]),
 
-                  // ---------- Payment Section (owner only) ----------
-                  if (widget.isOwner && _t.id != null) ...[
+                  // ---------- CENTER ADMIN CONTROLS ----------
+                  if (_isCenterAdminOfThis || !_hasProcess) ...[
+                    const SizedBox(height: 16),
+                    _centerAdminControls(),
+                  ],
+
+                  // ---------- Payment Section (owner OR center admin) ----------
+                  if ((widget.isOwner || _isCenterAdminOfThis) &&
+                      _t.id != null) ...[
                     const SizedBox(height: 16),
                     TrademarkPaymentSection(
                       trademarkId: _t.id!,
-                      isOwner: true,
+                      isOwner: widget.isOwner, // ✅ pay button owner only
                     ),
                   ],
 
@@ -293,8 +856,8 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
                     label: const Text('Chat with Executive'),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
-                      side: const BorderSide(color: Color(0xFF1E7A3A)),
-                      foregroundColor: const Color(0xFF1E7A3A),
+                      side: const BorderSide(color: Color(0xFF6A1B9A)),
+                      foregroundColor: const Color(0xFF6A1B9A),
                     ),
                   ),
                   if (widget.isOwner) ...[
@@ -328,6 +891,101 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
     );
   }
 
+  // ============ Center Admin Controls ============
+  Widget _centerAdminControls() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _primaryPurple.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.admin_panel_settings,
+                  color: _primaryPurple, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Center Admin Controls',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: _primaryPurple,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          OutlinedButton.icon(
+            onPressed: _openMyTmProcessControl,
+            icon: const Icon(Icons.list_alt),
+            label: const Text('My Trademark Processes'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 46),
+              side: const BorderSide(color: _primaryPurple),
+              foregroundColor: _primaryPurple,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          if (!_hasProcess) ...[
+            ElevatedButton.icon(
+              onPressed: _confirmAccept,
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('Accept Registration Process'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryPurple,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 46),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ] else if (_isCenterAdminOfThis) ...[
+            ElevatedButton.icon(
+              onPressed: _openEditProcess,
+              icon: const Icon(Icons.edit_note),
+              label: const Text('Update Registration Process'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryPurple,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 46),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _confirmDeleteProcess,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Delete Registration Process'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 46),
+                side: const BorderSide(color: Colors.red),
+                foregroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ============ Reusable widgets ============
+
   Widget _header(bool isApproved, bool isPending) {
     return Container(
       width: double.infinity,
@@ -344,10 +1002,10 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
             height: 70,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF6A1B9A).withOpacity(0.1),
+              color: _primaryPurple.withOpacity(0.1),
             ),
             child: const Icon(Icons.verified,
-                color: Color(0xFF6A1B9A), size: 36),
+                color: _primaryPurple, size: 36),
           ),
           const SizedBox(height: 12),
           Text(
@@ -383,7 +1041,7 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
               style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF6A1B9A))),
+                  color: _primaryPurple)),
           const SizedBox(height: 12),
           ...children,
         ],
@@ -462,7 +1120,7 @@ class _TrademarkDetailsScreenState extends State<TrademarkDetailsScreen> {
                 ),
               ),
               const Icon(Icons.visibility_outlined,
-                  size: 18, color: Color(0xFF6A1B9A)),
+                  size: 18, color: _primaryPurple),
             ],
           ),
         ),

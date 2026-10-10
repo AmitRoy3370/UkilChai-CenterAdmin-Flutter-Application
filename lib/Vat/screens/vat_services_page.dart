@@ -6,11 +6,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'vat_registration_page.dart';
 import 'my_vat_page.dart';
 import 'all_vat_page.dart';
+import 'my_vat_process_control_page.dart'; // ✅ NEW
 
 class VatServicesPage extends StatelessWidget {
   const VatServicesPage({super.key});
 
-  // ✅ 3 service options
+  // ✅ 4 service options
   final List<Map<String, dynamic>> services = const [
     {
       'title': 'VAT Registration',
@@ -33,9 +34,15 @@ class VatServicesPage extends StatelessWidget {
       'color': Color(0xFF6A1B9A),
       'action': 'all_vat',
     },
+    {
+      'title': 'My VAT Processes',
+      'subtitle': 'Manage VAT filings assigned to you',
+      'icon': Icons.assignment_ind,
+      'color': Color(0xFF0B5D36),
+      'action': 'my_vat_processes',
+    },
   ];
 
-  // ============ Handle OnTap ============
   Future<void> _handleTap(BuildContext context, String action) async {
     switch (action) {
       case 'vat_registration':
@@ -61,6 +68,15 @@ class VatServicesPage extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => const AllVatPage(),
+          ),
+        );
+        break;
+
+      case 'my_vat_processes':
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const MyVatProcessControlPage(),
           ),
         );
         break;
@@ -103,7 +119,6 @@ class VatServicesPage extends StatelessWidget {
     );
   }
 
-  // ============ Service Card ============
   Widget _buildServiceCard(
     BuildContext context, {
     required String title,
@@ -130,7 +145,6 @@ class VatServicesPage extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Icon box
             Container(
               height: 55,
               width: 55,
@@ -141,8 +155,6 @@ class VatServicesPage extends StatelessWidget {
               child: Icon(icon, size: 28, color: color),
             ),
             const SizedBox(width: 16),
-
-            // Title + Subtitle
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,8 +178,6 @@ class VatServicesPage extends StatelessWidget {
                 ],
               ),
             ),
-
-            // Arrow
             Container(
               padding: const EdgeInsets.all(6),
               decoration: const BoxDecoration(

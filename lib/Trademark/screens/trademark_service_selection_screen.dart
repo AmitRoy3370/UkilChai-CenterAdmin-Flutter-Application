@@ -1,9 +1,10 @@
-// lib/c
+// lib/Trademark/screens/trademark_service_selection_screen.dart
 
 import 'package:flutter/material.dart';
 import 'trademark_registration_screen.dart';
 import 'my_trademark_screen.dart';
 import 'all_trademark_screen.dart';
+import 'my_trademark_process_control_screen.dart'; // ✅ NEW
 
 class TrademarkServiceSelectionScreen extends StatelessWidget {
   const TrademarkServiceSelectionScreen({super.key});
@@ -65,6 +66,23 @@ class TrademarkServiceSelectionScreen extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (_) => const AllTrademarkScreen(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // ✅ NEW tile
+              _card(
+                context,
+                icon: Icons.assignment_ind,
+                color: const Color(0xFF0B5D36),
+                title: 'My Trademark Processes',
+                subtitle:
+                    'Manage trademark filings assigned to you',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const MyTrademarkProcessControlScreen(),
                   ),
                 ),
               ),

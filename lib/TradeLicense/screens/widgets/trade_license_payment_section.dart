@@ -12,7 +12,11 @@ const String kTradeLicenseReceiverPhone = '+8801874648472';
 
 class TradeLicensePaymentSection extends StatefulWidget {
   final String tradeLicenseId;
+
+  /// ✅ When true, the "Make Payment" button is shown.
+  ///    Owner-only — center admins should pass `false`.
   final bool isOwner;
+
   final VoidCallback? onPaymentAdded;
 
   const TradeLicensePaymentSection({
@@ -238,7 +242,7 @@ class _TradeLicensePaymentSectionState
           else
             _historyList(),
 
-          // ---------- Make Payment Button ----------
+          // ---------- Make Payment Button (OWNER ONLY) ----------
           if (widget.isOwner && !_isFullyPaid) ...[
             const SizedBox(height: 14),
             ElevatedButton.icon(

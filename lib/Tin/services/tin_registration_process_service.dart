@@ -68,9 +68,26 @@ class TinRegistrationProcessService {
   // ==========================================================================
   // 3. FIND BY ID — GET /api/tin-registration/{id}
   // ==========================================================================
-  static Future<Map<String, dynamic>> findById(String id) async {
-    return _getRequest('$_baseUrl/$id');
+static Future<Map<String, dynamic>> findByTinId(String tinId) async {
+  try {
+    final uri = Uri.parse(
+        '$_baseUrl/search/tin?tinId=${Uri.encodeComponent(tinId)}');
+    final headers = await _authHeaders();
+    final response = await http.get(uri, headers: headers);
+    return _handleResponse(response);
+  } catch (e) {
+    return {'status': 'error', 'message': 'Network error: $e'};
   }
+}
+
+static TinRegistrationProcessDTO? parseSingleDTO(
+    Map<String, dynamic> json) {
+  if (json['status'] == 'success' && json['data'] != null) {
+    return TinRegistrationProcessDTO.fromJson(
+        Map<String, dynamic>.from(json['data']));
+  }
+  return null;
+}
 
   // ==========================================================================
   // 4. FIND ALL — GET /api/tin-registration/all
@@ -100,10 +117,10 @@ class TinRegistrationProcessService {
   // ==========================================================================
   // 7. FIND BY TIN ID
   // ==========================================================================
-  static Future<Map<String, dynamic>> findByTinId(String tinId) async {
+  /*static Future<Map<String, dynamic>> findByTinId(String tinId) async {
     return _getRequest(
         '$_baseUrl/search/tin?tinId=${Uri.encodeComponent(tinId)}');
-  }
+  }*/
 
   // ==========================================================================
   // 8. FIND BY STEPS

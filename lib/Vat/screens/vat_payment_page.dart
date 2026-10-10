@@ -12,10 +12,16 @@ class VatPaymentPage extends StatefulWidget {
   final VatResponseModel vat;
   final String? currentUserId;
 
+  /// ✅ When true (default), the "Add Payment" flow is available.
+  /// When false (e.g. center admin viewing), only the summary +
+  /// history are shown — no pay button / add form.
+  final bool canPay;
+
   const VatPaymentPage({
     super.key,
     required this.vat,
     required this.currentUserId,
+    this.canPay = true,
   });
 
   @override
@@ -124,7 +130,6 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
         senderUserId: widget.currentUserId!,
         senderUserName: senderName,
         senderPhoneNumber: _phoneCtrl.text.trim(),
-        // ✅ Explicitly use the fixed receiver number
         receiverPhoneNumber: _receiverPhone,
         amount: double.parse(_amountCtrl.text.trim()),
         transactionId: _transactionIdCtrl.text.trim(),
@@ -155,7 +160,8 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
+        backgroundColor:
+            isError ? Colors.red.shade700 : Colors.green.shade700,
       ),
     );
   }
@@ -163,6 +169,9 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
   // ============ BUILD ============
   @override
   Widget build(BuildContext context) {
+    // Never show the add form if not allowed
+    final showAddForm = widget.canPay && _addMode;
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -170,7 +179,7 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black87),
         title: Text(
-          _addMode ? 'New Payment' : 'VAT Payments',
+          showAddForm ? 'New Payment' : 'VAT Payments',
           style: GoogleFonts.inter(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -178,13 +187,16 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
           ),
         ),
         actions: [
-          if (!_addMode && !_loading && _error == null)
+          // ✅ "+" icon — only when canPay and not already in add mode
+          if (widget.canPay && !_addMode && !_loading && _error == null)
             IconButton(
               icon: const Icon(Icons.add, color: Color(0xFF1565C0)),
               tooltip: 'Add Payment',
               onPressed: () => setState(() => _addMode = true),
             ),
-          if (_addMode)
+
+          // ✅ Close (cancel add) icon — only when in add mode
+          if (showAddForm)
             IconButton(
               icon: const Icon(Icons.close, color: Colors.black87),
               tooltip: 'Cancel',
@@ -192,7 +204,7 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
             ),
         ],
       ),
-      body: _addMode ? _buildAddForm() : _buildPaymentView(),
+      body: showAddForm ? _buildAddForm() : _buildPaymentView(),
     );
   }
 
@@ -248,24 +260,27 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
           _receiverCard(),
           const SizedBox(height: 16),
 
-          // ---- Add payment CTA ----
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => setState(() => _addMode = true),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Send New Payment'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1565C0),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+          // ---- Add payment CTA (owner only) ----
+          if (widget.canPay) ...[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => setState(() => _addMode = true),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Send New Payment'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1565C0),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 20),
+          ] else
+            const SizedBox(height: 8),
 
           // ---- History ----
           Row(
@@ -330,7 +345,8 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.25)),
+        border:
+            Border.all(color: const Color(0xFF1565C0).withOpacity(0.25)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -380,7 +396,8 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.copy, color: Color(0xFF1565C0), size: 20),
+            icon: const Icon(Icons.copy,
+                color: Color(0xFF1565C0), size: 20),
             tooltip: 'Copy number',
             onPressed: _copyReceiverNumber,
           ),
@@ -426,7 +443,8 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
           ),
           const SizedBox(height: 14),
 
-          _moneyRow('Total Amount', _totalPrice, Colors.white.withOpacity(0.95)),
+          _moneyRow(
+              'Total Amount', _totalPrice, Colors.white.withOpacity(0.95)),
           const SizedBox(height: 8),
           _moneyRow('Paid', _paidAmount, Colors.green.shade200),
           const SizedBox(height: 8),
@@ -554,9 +572,12 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
           _row('Transaction ID', p.transactionId),
           _row('Sender Phone', p.senderPhoneNumber),
           _row('Sender', p.senderUserName),
-          // ✅ Prefer the model's value but fall back to the fixed constant
-          _row('Receiver Phone',
-              p.receiverPhoneNumber.isEmpty ? _receiverPhone : p.receiverPhoneNumber),
+          _row(
+            'Receiver Phone',
+            p.receiverPhoneNumber.isEmpty
+                ? _receiverPhone
+                : p.receiverPhoneNumber,
+          ),
         ],
       ),
     );
@@ -628,7 +649,9 @@ class _VatPaymentPageState extends State<VatPaymentPage> {
             child: Row(
               children: [
                 Icon(
-                  remaining <= 0 ? Icons.check_circle : Icons.info_outline,
+                  remaining <= 0
+                      ? Icons.check_circle
+                      : Icons.info_outline,
                   color: remaining <= 0
                       ? Colors.green.shade700
                       : Colors.orange.shade700,

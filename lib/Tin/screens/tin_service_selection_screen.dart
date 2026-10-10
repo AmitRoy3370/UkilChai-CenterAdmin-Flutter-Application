@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'tin_registration_screen.dart';
 import 'my_tin_screen.dart';
 import 'all_tin_screen.dart';
+import 'my_tin_process_control_screen.dart'; // ✅ NEW
 
 class TinServiceSelectionScreen extends StatelessWidget {
   const TinServiceSelectionScreen({super.key});
@@ -59,6 +60,21 @@ class TinServiceSelectionScreen extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AllTinScreen()),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // ✅ NEW tile
+              _card(
+                context,
+                icon: Icons.assignment_ind,
+                color: const Color(0xFF0B5D36),
+                title: 'My TIN Processes',
+                subtitle: 'Manage TIN filings assigned to you',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const MyTinProcessControlScreen(),
+                  ),
                 ),
               ),
             ],
