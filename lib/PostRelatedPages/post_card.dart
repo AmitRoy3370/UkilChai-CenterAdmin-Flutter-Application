@@ -68,12 +68,16 @@ class _PostCardState extends State<PostCard> {
         widget.post.attachmentId != "attachmentId";
   }
 
+  // ── ✅ NEW: Post title detection (same rule as admin panel) ─────────────
+  bool get _hasTitle =>
+      widget.post.postTitle != null &&
+      widget.post.postTitle!.trim().isNotEmpty;
+
   // ── Long content detection ──────────────────────────────────────────────
   bool get _isLongContent =>
       widget.post.postContent.length > _minCharLength;
 
   // ── Can the current user DELETE this post? ───────────────────────────────
-  // Yes if this post belongs to one of MY advocates.
   bool get _canDeletePost {
     final postAdvocateId = widget.post.advocateId;
     if (postAdvocateId == null || postAdvocateId.isEmpty) return false;
@@ -83,9 +87,7 @@ class _PostCardState extends State<PostCard> {
 
   // Should the overlay menu appear at all?
   bool get _showMenu {
-    // Parent explicitly asked for menu items?
     final parentWants = widget.onEdit != null || widget.onDelete != null;
-    // Or built-in permission grants something?
     final builtIn = _canDeletePost;
     return parentWants || builtIn;
   }
@@ -466,6 +468,21 @@ class _PostCardState extends State<PostCard> {
                       ),
                   ],
                 ),
+
+                // ── ✅ NEW: Post Title (conditional, same as admin panel) ─
+                if (_hasTitle) ...[
+                  const SizedBox(height: 14),
+                  Text(
+                    widget.post.postTitle!,
+                    style: GoogleFonts.inter(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey[900],
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 12),
 
                 // ── Post content ─────────────────────────────────────────

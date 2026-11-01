@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import '../PostRelatedPages/post_response.dart';
 import 'package:http/http.dart' as http;
+import '../PostRelatedPages/post_response.dart';
 import './AdvocatePost.dart';
 import '../Utils/BaseURL.dart' as BASE_URL;
 
@@ -14,6 +14,7 @@ class PostService {
     required String advocateId,
     required String postContent,
     required String postType,
+    String? postTitle,
     File? file,
     required String token,
   }) async {
@@ -23,15 +24,15 @@ class PostService {
         Uri.parse("${BASE_URL.Urls().baseURL}advocate/posts/upload/$userId"),
       );
 
-      // Headers
       request.headers['Authorization'] = 'Bearer $token';
 
-      // Fields
       request.fields['advocateId'] = advocateId;
       request.fields['postContent'] = postContent;
       request.fields['postType'] = postType;
+      if (postTitle != null && postTitle.isNotEmpty) {
+        request.fields['postTitle'] = postTitle;
+      }
 
-      // File attachment (optional)
       if (file != null) {
         var multipartFile = await http.MultipartFile.fromPath(
           'file',
@@ -44,8 +45,7 @@ class PostService {
 
       if (response.statusCode == 201) {
         var responseData = await response.stream.bytesToString();
-        var jsonData = jsonDecode(responseData);
-        return AdvocatePost.fromJson(jsonData);
+        return AdvocatePost.fromJson(jsonDecode(responseData));
       } else {
         var errorData = await response.stream.bytesToString();
         throw Exception(errorData);
@@ -67,7 +67,6 @@ class PostService {
     if (res.statusCode != 200) {
       throw Exception("Failed to load posts: ${res.body}");
     }
-
     final List data = jsonDecode(res.body);
     return data.map((e) => PostResponse.fromJson(e)).toList();
   }
@@ -78,7 +77,7 @@ class PostService {
   static Future<List<PostResponse>> fetchSpecificAdvocatesPosts(
     String? advocateId,
     String? token,
- ) async {
+  ) async {
     final res = await http.get(
       Uri.parse(
         "${BASE_URL.Urls().baseURL}advocate/posts/advocate/$advocateId",
@@ -89,7 +88,6 @@ class PostService {
     if (res.statusCode != 200) {
       throw Exception("Failed to load posts: ${res.body}");
     }
-
     final List data = jsonDecode(res.body);
     return data.map((e) => PostResponse.fromJson(e)).toList();
   }
@@ -102,22 +100,19 @@ class PostService {
     required String token,
   }) async {
     final res = await http.get(
-      Uri.parse(
-        "${BASE_URL.Urls().baseURL}advocate/posts/type/$postType",
-      ),
+      Uri.parse("${BASE_URL.Urls().baseURL}advocate/posts/type/$postType"),
       headers: {"Authorization": "Bearer $token"},
     );
 
     if (res.statusCode != 200) {
       throw Exception("Failed to load posts: ${res.body}");
     }
-
     final List data = jsonDecode(res.body);
     return data.map((e) => PostResponse.fromJson(e)).toList();
   }
 
   // -------------------------------------------------
-  // 5. FIND BY ADVOCATE ID + POST TYPE (FILTER)
+  // 5. FILTER BY ADVOCATE + POST TYPE
   // -------------------------------------------------
   static Future<List<PostResponse>> filterPostsByAdvocateAndType({
     required String advocateId,
@@ -134,7 +129,6 @@ class PostService {
     if (res.statusCode != 200) {
       throw Exception("Failed to load posts: ${res.body}");
     }
-
     final List data = jsonDecode(res.body);
     return data.map((e) => PostResponse.fromJson(e)).toList();
   }
@@ -148,7 +142,7 @@ class PostService {
   }) async {
     final res = await http.get(
       Uri.parse(
-        "${BASE_URL.Urls().baseURL}advocate/posts/search?keyword=$keyword",
+        "${BASE_URL.Urls().baseURL}advocate/posts/search?keyword=${Uri.encodeComponent(keyword)}",
       ),
       headers: {"Authorization": "Bearer $token"},
     );
@@ -156,7 +150,27 @@ class PostService {
     if (res.statusCode != 200) {
       throw Exception("Failed to search posts: ${res.body}");
     }
+    final List data = jsonDecode(res.body);
+    return data.map((e) => PostResponse.fromJson(e)).toList();
+  }
 
+  // -------------------------------------------------
+  // 6b. SEARCH BY POST TITLE (NEW)
+  // -------------------------------------------------
+  static Future<List<PostResponse>> searchByPostTitle({
+    required String title,
+    required String token,
+  }) async {
+    final res = await http.get(
+      Uri.parse(
+        "${BASE_URL.Urls().baseURL}advocate/posts/search/title/${Uri.encodeComponent(title)}",
+      ),
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception("Failed to search posts by title: ${res.body}");
+    }
     final List data = jsonDecode(res.body);
     return data.map((e) => PostResponse.fromJson(e)).toList();
   }
@@ -173,7 +187,6 @@ class PostService {
     if (res.statusCode != 200) {
       throw Exception("Failed to load latest posts: ${res.body}");
     }
-
     final List data = jsonDecode(res.body);
     return data.map((e) => PostResponse.fromJson(e)).toList();
   }
@@ -181,7 +194,10 @@ class PostService {
   // -------------------------------------------------
   // 8. POSTS WITH ATTACHMENTS
   // -------------------------------------------------
-  static Future<List<PostResponse>> fetchPostsWithAttachments(String token, String attachments) async {
+  static Future<List<PostResponse>> fetchPostsWithAttachments(
+    String token,
+    String attachments,
+  ) async {
     final res = await http.get(
       Uri.parse("${BASE_URL.Urls().baseURL}advocate/posts/attachments"),
       headers: {"Authorization": "Bearer $token"},
@@ -190,7 +206,6 @@ class PostService {
     if (res.statusCode != 200) {
       throw Exception("Failed to load posts with attachments: ${res.body}");
     }
-
     final List data = jsonDecode(res.body);
     return data.map((e) => PostResponse.fromJson(e)).toList();
   }
@@ -212,9 +227,7 @@ class PostService {
     if (res.statusCode != 200) {
       throw Exception("Failed to find post: ${res.body}");
     }
-
-    final data = jsonDecode(res.body);
-    return PostResponse.fromJson(data);
+    return PostResponse.fromJson(jsonDecode(res.body));
   }
 
   // -------------------------------------------------
@@ -225,6 +238,7 @@ class PostService {
     required String userId,
     required String advocateId,
     String? postContent,
+    String? postTitle,
     required String postType,
     String? attachmentId,
     File? file,
@@ -233,23 +247,25 @@ class PostService {
     try {
       var request = http.MultipartRequest(
         'PUT',
-        Uri.parse("${BASE_URL.Urls().baseURL}advocate/posts/update/$postId/$userId"),
+        Uri.parse(
+          "${BASE_URL.Urls().baseURL}advocate/posts/update/$postId/$userId",
+        ),
       );
 
-      // Headers
       request.headers['Authorization'] = 'Bearer $token';
 
-      // Fields (all fields are required except file)
       request.fields['advocateId'] = advocateId;
       if (postContent != null) {
         request.fields['postContent'] = postContent;
       }
+      if (postTitle != null && postTitle.isNotEmpty) {
+        request.fields['postTitle'] = postTitle;
+      }
       request.fields['postType'] = postType;
-      if (attachmentId != null) {
+      if (attachmentId != null && attachmentId.isNotEmpty) {
         request.fields['attachmentId'] = attachmentId;
       }
 
-      // File attachment (optional)
       if (file != null) {
         var multipartFile = await http.MultipartFile.fromPath(
           'file',
@@ -262,8 +278,7 @@ class PostService {
 
       if (response.statusCode == 200) {
         var responseData = await response.stream.bytesToString();
-        var jsonData = jsonDecode(responseData);
-        return AdvocatePost.fromJson(jsonData);
+        return AdvocatePost.fromJson(jsonDecode(responseData));
       } else {
         var errorData = await response.stream.bytesToString();
         throw Exception(errorData);
@@ -291,7 +306,6 @@ class PostService {
 
       if (res.statusCode == 200) {
         final responseData = jsonDecode(res.body);
-        // Response format: "Deleted = true" or "Deleted = false"
         return responseData.toString().contains('true');
       } else {
         throw Exception("Failed to delete post: ${res.body}");
@@ -301,5 +315,29 @@ class PostService {
     }
   }
 
+  // -------------------------------------------------
+  // 12. DOWNLOAD POST CONTENT (NEW)
+  // -------------------------------------------------
+  static Future<http.Response> downloadPostContent({
+    required String attachmentId,
+    required String token,
+  }) async {
+    final res = await http.get(
+      Uri.parse(
+        "${BASE_URL.Urls().baseURL}advocate/posts/download/postContent?attachmentId=$attachmentId",
+      ),
+      headers: {"Authorization": "Bearer $token"},
+    );
 
+    if (res.statusCode != 200) {
+      throw Exception("Failed to download attachment: ${res.body}");
+    }
+    return res;
+  }
+
+  // -------------------------------------------------
+  // 13. VIEW ATTACHMENT (NEW)
+  // -------------------------------------------------
+  static String viewAttachmentUrl(String attachmentId) =>
+      "${BASE_URL.Urls().baseURL}advocate/posts/attachment/view/$attachmentId";
 }

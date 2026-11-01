@@ -19,9 +19,18 @@ class _PostFeedPageState extends State<PostFeedPage> {
   bool loading = true;
   List<PostResponse> posts = [];
 
+  // ✅ Cached future so rebuilds don't re-fire the HTTP request.
+  late Future<List<PostResponse>> _postsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // Kick off the load exactly once.
+    _postsFuture = getPosts();
+  }
+
   // Method to navigate to main page
   void _navigateToMainPage() {
-    // Always use pushAndRemoveUntil to ensure we go to main page
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => const MyHomePage(title: 'উকিল')),
@@ -35,15 +44,21 @@ class _PostFeedPageState extends State<PostFeedPage> {
 
     final data = await PostService.fetchAllPosts(token);
 
-    /*ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('data :- $data'),
-        duration: Duration(seconds: 2),
-      ),
-    );*/
-
-
     return data.reversed.toList();
+  }
+
+  /// ✅ Trigger a fresh fetch (pull-to-refresh, retry button, etc.).
+  /// Does **not** rebuild on its own — the FutureBuilder listens to it.
+  Future<void> _reload() async {
+    final future = getPosts();
+    setState(() {
+      _postsFuture = future;
+    });
+    // Let RefreshIndicator wait for completion, and swallow errors so the
+    // indicator hides even on failure (FutureBuilder will show the error).
+    try {
+      await future;
+    } catch (_) {}
   }
 
   @override
@@ -68,12 +83,11 @@ class _PostFeedPageState extends State<PostFeedPage> {
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          setState(() {});
-        },
+        onRefresh: _reload,
         color: Colors.purple,
         child: FutureBuilder<List<PostResponse>>(
-          future: getPosts(),
+          // ✅ Bind to the cached future, not a new one per build.
+          future: _postsFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
@@ -82,7 +96,8 @@ class _PostFeedPageState extends State<PostFeedPage> {
                   children: [
                     CircularProgressIndicator(color: Colors.purple),
                     SizedBox(height: 16),
-                    Text('Loading posts...', style: TextStyle(color: Colors.grey)),
+                    Text('Loading posts...',
+                        style: TextStyle(color: Colors.grey)),
                   ],
                 ),
               );
@@ -93,7 +108,8 @@ class _PostFeedPageState extends State<PostFeedPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                    Icon(Icons.error_outline,
+                        size: 64, color: Colors.red[300]),
                     const SizedBox(height: 16),
                     Text(
                       'Error: ${snapshot.error}',
@@ -101,7 +117,7 @@ class _PostFeedPageState extends State<PostFeedPage> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: () => setState(() {}),
+                      onPressed: _reload,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.purple,
                         foregroundColor: Colors.white,
@@ -137,12 +153,19 @@ class _PostFeedPageState extends State<PostFeedPage> {
 
             return ListView.builder(
               padding: const EdgeInsets.all(16),
+              // Keep the RefreshIndicator scrollable even with few items.
+              physics: const AlwaysScrollableScrollPhysics(),
               itemCount: posts.length,
               itemBuilder: (_, index) {
                 final post = posts[index];
                 return PostCard(
                   post: post,
                   onReactionChanged: (reaction, action) {
+                    // ✅ No setState here — the FutureBuilder future is
+                    //    cached, so this won't trigger a refetch. PostCard
+                    //    already updates its own reaction list locally.
+                    //    If you want the parent to reflect the change,
+                    //    keep setState (it's now cheap — no HTTP refire).
                     setState(() {});
                   },
                   canReact: true,

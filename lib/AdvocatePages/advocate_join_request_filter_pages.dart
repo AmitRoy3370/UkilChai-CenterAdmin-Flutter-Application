@@ -10,19 +10,26 @@ import '../AdvocatePages/AdvocateDetailsModel.dart';
 import 'AdvocateDetails.dart';
 import 'AdvocateJoinRequestDetails.dart';
 import 'advocate_join_request.dart';
+import 'advocate_join_request_dto_model.dart';
+import 'advocate_join_request_service.dart';
 
 class AdvocateJoinRequestFilterPage extends StatefulWidget {
   const AdvocateJoinRequestFilterPage({super.key});
 
   @override
-  State<AdvocateJoinRequestFilterPage> createState() => _AdvocateJoinRequestFilterPageState();
+  State<AdvocateJoinRequestFilterPage> createState() =>
+      _AdvocateJoinRequestFilterPageState();
 }
 
-class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilterPage> {
+class _AdvocateJoinRequestFilterPageState
+    extends State<AdvocateJoinRequestFilterPage> {
   AdvocateSpeciality? selectedSpeciality;
   bool loading = true;
 
-  List<AdvocateJoinRequestModel> list = [];
+  List<AdvocateJoinRequestDTO> list = [];
+
+  AdvocateJoinRequestService advocateJoinRequestService =
+      new AdvocateJoinRequestService();
 
   @override
   void initState() {
@@ -91,7 +98,9 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('jwt_token') ?? '';
 
-      final response = await http.get(
+      list = await AdvocateJoinRequestService.getAllRequests();
+
+      /*final response = await http.get(
         Uri.parse("${BASE_URL.Urls().baseURL}advocateJoinRequest/all"),
         headers: {"Authorization": "Bearer $token"},
       );
@@ -178,7 +187,7 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
           ..district = advocateDecoded['district'];
 
         list.add(model);
-      }
+      }*/
     } catch (e) {
       debugPrint("Error loading advocates: $e");
     } finally {
@@ -195,7 +204,9 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
     SharedPreferences prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token') ?? '';
 
-    final response = await http.get(
+    list = await AdvocateJoinRequestService.findBySpeciality(speciality.label);
+
+    /*final response = await http.get(
       Uri.parse(
         "${BASE_URL.Urls().baseURL}advocateJoinRequest/speciality/${speciality.name}",
       ),
@@ -300,8 +311,7 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
       setState(() {
         loading = false;
         list.clear();
-      });
-    }
+      });*/
   }
 
   @override
@@ -325,7 +335,7 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
                   child: Text("All Specialities"),
                 ),
                 ...AdvocateSpeciality.values.map(
-                      (s) => DropdownMenuItem(
+                  (s) => DropdownMenuItem(
                     value: s,
                     child: Text(s.label), // 👈 from enum extension
                   ),
@@ -350,40 +360,52 @@ class _AdvocateJoinRequestFilterPageState extends State<AdvocateJoinRequestFilte
                 : list.isEmpty
                 ? const Center(child: Text("No advocates found"))
                 : ListView.builder(
-              itemCount: list.length,
-              itemBuilder: (context, index) {
-                final adv = list[index];
+                    itemCount: list.length,
+                    itemBuilder: (context, index) {
+                      final adv = list[index];
 
-                return Card(
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: ListTile(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              AdvocateJoinRequestDetails(advocateDetailsModel: adv),
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        child: ListTile(
+                         onTap: () async {
+  final changed = await Navigator.push<bool>(
+    context,
+    MaterialPageRoute(
+      builder: (_) => AdvocateJoinRequestDetails(
+        advocateDetailsModel: adv,
+      ),
+    ),
+  );
+
+  // ✅ If the details page returned `true` (Deny succeeded), refresh the list.
+  if (changed == true) {
+    if (selectedSpeciality == null) {
+      await getAdvocateList();
+    } else {
+      await fetchBySpeciality(selectedSpeciality!);
+    }
+  }
+},
+                          leading: const Icon(Icons.person),
+                          title: Text(
+                            "Advocate: ${adv.fullName ?? adv.userName ?? "Unknown"}",
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("Experience: ${adv.experience ?? 0} years"),
+                              Text(
+                                "Speciality: ${adv.advocateSpeciality.join(", ")}",
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },
-                    leading: const Icon(Icons.person),
-                    title: Text("Advocate: ${adv.name ?? "Unknown"}"),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Experience: ${adv.experience ?? 0} years"),
-                        Text(
-                          "Speciality: ${adv.advocateSpeciality.join(", ")}",
-                        ),
-                      ],
-                    ),
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),

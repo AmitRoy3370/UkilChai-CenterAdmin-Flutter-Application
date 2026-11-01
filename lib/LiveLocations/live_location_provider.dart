@@ -18,6 +18,7 @@ class LiveLocationProvider extends ChangeNotifier {
   String? _advocateId;
   bool _isInitialized = false;
   String _myUserName = '';
+  String? _myFullName;
 
   List<UserLiveLocationDataResponse> get allLocations => _allLocations;
   UserLiveLocationDataResponse? get myLocation => _myLocation;
@@ -135,6 +136,7 @@ class LiveLocationProvider extends ChangeNotifier {
           orElse: () => UserLiveLocationDataResponse(
             userId: _currentUserId!,
             userName: _myUserName,
+            fullName : _myFullName,
             locationName: _myLocation?.locationName ?? '',
             latitude: _myLocation?.latitude ?? 0.0,
             longitude: _myLocation?.longitude ?? 0.0,

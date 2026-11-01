@@ -48,6 +48,11 @@ class _PostCardHomePageState extends State<PostCardHomePage> {
     _loadTokenAndAdmin();
   }
 
+  // ── ✅ NEW: Post title detection (same rule as admin panel) ───────────
+  bool get _hasTitle =>
+      widget.post.postTitle != null &&
+      widget.post.postTitle!.trim().isNotEmpty;
+
   // ── Load token + center-admin info ────────────────────────────────────
   Future<void> _loadTokenAndAdmin() async {
     final token = await AuthService.getToken();
@@ -456,6 +461,22 @@ class _PostCardHomePageState extends State<PostCardHomePage> {
                 ),
 
                 const SizedBox(height: 8),
+
+                // ── ✅ NEW: Post Title (conditional, same as admin panel) ─
+                if (_hasTitle) ...[
+                  Text(
+                    widget.post.postTitle!,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey[900],
+                      height: 1.35,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                ],
 
                 // ── Content ────────────────────────────────────────────
                 if (widget.post.postContent.isNotEmpty) _buildPostContent(),

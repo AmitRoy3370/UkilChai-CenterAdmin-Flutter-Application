@@ -1,5 +1,10 @@
 import '../RegistrationPage/gender.dart';
 
+// Assuming you create these models based on our previous discussions
+import 'advocate_working_experience_model.dart';
+import 'advocate_documents_model.dart';
+import 'advocate_additional_info_model.dart';
+
 class AdvocateDetailsModel {
   String? id;
   String? contactInfoId;
@@ -15,7 +20,7 @@ class AdvocateDetailsModel {
   List<String> advocateSpeciality;
 
   int? experience;
-  double rating; // 🔥 non-nullable করা হয়েছে
+  double rating;
 
   String? licenseKey;
   String? cvHexKey;
@@ -32,86 +37,115 @@ class AdvocateDetailsModel {
   double? lattitude;
   double? longitude;
 
+  // ✅ ADDED: Nested models from AdvocateResponse DTO
+  AdvocateWorkingExperience? workingExperience;
+  AdvocateDocuments? advocateDocuments;
+  AdvocateAdditionalInfo? additionalInfo;
+
   AdvocateDetailsModel(
-      this.id,
-      this.contactInfoId,
-      this.locationId,
-      this.userId,
-      this.name,
-      this.fullName,
-      this.profileImageId,
-      this.advocateSpeciality,
-      this.experience,
-      this.licenseKey,
-      this.cvHexKey,
-      this.degrees,
-      this.workingExperiences,
-      this.email,
-      this.phone,
-      this.locationName,
-      this.lattitude,
-      this.longitude,
-      this.district,
-      this.rating,
-      this.userGenderId,
-      this.gender
-      );
+    this.id,
+    this.contactInfoId,
+    this.locationId,
+    this.userId,
+    this.name,
+    this.fullName,
+    this.profileImageId,
+    this.advocateSpeciality,
+    this.experience,
+    this.licenseKey,
+    this.cvHexKey,
+    this.degrees,
+    this.workingExperiences,
+    this.email,
+    this.phone,
+    this.locationName,
+    this.lattitude,
+    this.longitude,
+    this.district,
+    this.rating,
+    this.userGenderId,
+    this.gender,
+    this.workingExperience,
+    this.advocateDocuments,
+    this.additionalInfo,
+  );
 
   AdvocateDetailsModel.defaultConstructor()
-      : advocateSpeciality = [],
-        degrees = [],
-        workingExperiences = [],
-        rating = 0.0; // 🔥 ডিফল্ট ভ্যালু
+    : advocateSpeciality = [],
+      degrees = [],
+      workingExperiences = [],
+      rating = 0.0;
 
-  // 🔥 FROM JSON
-  factory AdvocateDetailsModel.fromJson(Map<String, dynamic> json) {
-    return AdvocateDetailsModel(
-      json['id']?.toString() ?? json['_id']?.toString(),
-      json['contactInfoId']?.toString(),
-      json['locationId']?.toString(),
-      json['userId']?.toString(),
-      json['name']?.toString(),
-      json['fullName']?.toString(),
-      json['profileImageId']?.toString(),
+  // 🔥 FROM JSON (Mapped exactly to AdvocateResponse)
+factory AdvocateDetailsModel.fromJson(Map<String, dynamic> json) {
+  return AdvocateDetailsModel(
+    json['id']?.toString() ?? json['_id']?.toString(),
+    json['contactInfoId']?.toString(),
+    json['locationId']?.toString(),
+    json['userId']?.toString(),
+    json['name']?.toString(),
+    json['fullName']?.toString(),
+    json['profileImageId']?.toString(),
+    _parseStringList(json['advocateSpeciality']),
+    _parseInt(json['experience']) ?? 0,
+    json['licenseKey']?.toString(),
+    json['cvHexKey']?.toString(),
+    _parseStringList(json['degrees']),
+    _parseStringList(json['workingExperiences']),
+    json['email']?.toString(),
+    json['phone']?.toString(),
+    json['locationName']?.toString(),
+    _parseDouble(json['lattitude']),
+    _parseDouble(json['longitude']),
+    json['district']?.toString(),          // ✅ null instead of ''
+    _parseDouble(json['rating']) ?? 0.0,
+    json['userGenderId']?.toString(),
+    _parseGender(json['gender']),          // ✅ safe
+    json['workingExperience'] != null
+        ? AdvocateWorkingExperience.fromJson(json['workingExperience'])
+        : null,
+    json['advocateDocuments'] != null
+        ? AdvocateDocuments.fromJson(json['advocateDocuments'])
+        : null,
+    json['additionalInfo'] != null
+        ? AdvocateAdditionalInfo.fromJson(json['additionalInfo'])
+        : null,
+  );
+}
 
-      // ✅ Enum Set → List<String>
-      json['advocateSpeciality'] != null
-          ? List<String>.from(json['advocateSpeciality'].map((e) => e.toString()))
-          : [],
+// ── Safe cast helpers ─────────────────────────────────────
+static int? _parseInt(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  return int.tryParse(v.toString());
+}
 
-      (json['experience'] ?? 0).toInt(),
+static double? _parseDouble(dynamic v) {
+  if (v == null) return null;
+  if (v is double) return v;
+  if (v is num) return v.toDouble();
+  return double.tryParse(v.toString());
+}
 
-      json['licenseKey']?.toString(),
-      json['cvHexKey']?.toString(),
+static List<String> _parseStringList(dynamic v) {
+  if (v == null) return <String>[];
+  if (v is List) return v.map((e) => e.toString()).toList();
+  return <String>[];
+}
 
-      // ✅ Arrays
-      json['degrees'] != null
-          ? List<String>.from(json['degrees'].map((e) => e.toString()))
-          : [],
-
-      json['workingExperiences'] != null
-          ? List<String>.from(
-          json['workingExperiences'].map((e) => e.toString()))
-          : [],
-
-      json['email']?.toString(),
-      json['phone']?.toString(),
-
-      json['locationName']?.toString(),
-      
-      json['lattitude'] != null
-          ? double.tryParse(json['lattitude'].toString())
-          : null,
-
-      json['longitude'] != null
-          ? double.tryParse(json['longitude'].toString())
-          : null,
-      json['district'] != null ? json['district'] : '',
-      json['rating'] != null 
-          ? double.tryParse(json['rating'].toString()) ?? 0.0 
-          : 0.0,
-      json['userGenderId'],
-      json['gender']
-    );
+static Gender? _parseGender(dynamic v) {
+  if (v == null) return null;
+  final s = v.toString().toUpperCase();
+  switch (s) {
+    case 'MALE':
+      return Gender.MALE;
+    case 'FEMALE':
+      return Gender.FEMALE;
+    case 'OTHER':
+      return Gender.OTHER;
+    default:
+      return null;   // ✅ never throws
   }
+}
 }

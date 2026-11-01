@@ -16,12 +16,14 @@ class LiveLocationScreen extends StatefulWidget {
   final String userId;
   final String? advocateId;
   final String userName;
+  final String? fullName;
 
-  const LiveLocationScreen({
+   const LiveLocationScreen({
     super.key,
     required this.userId,
     this.advocateId,
     required this.userName,
+    required this.fullName,
   });
 
   @override
@@ -192,7 +194,7 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              user.userName,
+              user.fullName ?? user.userName,
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             Text(
@@ -267,7 +269,7 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
         builder: (_) => LiveNavigationScreen(
           userId: widget.userId,
           targetUserId: targetUser.userId,
-          targetUserName: targetUser.userName,
+          targetUserName: targetUser.fullName ?? targetUser.userName,
           isTargetAdvocate: targetUser.isAdvocate,
           myLocation: myLocation,
           targetLocation: targetUser,
@@ -331,7 +333,13 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
 
       for (var location in provider.allLocations) {
         if (location.userId != provider.myLocation?.userId) {
-          newMarkers.add(_createMarkerFromLiveLocation(location, false));
+
+          if(location.advocateId != null) {
+
+              newMarkers.add(_createMarkerFromLiveLocation(location, false));
+
+          }
+
         }
       }
 
@@ -396,7 +404,7 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                isMyLocation ? 'You' : location.userName,
+                isMyLocation ? 'You' : (location.fullName ?? location.userName),
                 style: const TextStyle(color: Colors.white, fontSize: 10),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -707,7 +715,7 @@ class _LiveLocationScreenState extends State<LiveLocationScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              location.userName,
+              location.fullName ?? location.userName,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),

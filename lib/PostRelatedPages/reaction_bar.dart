@@ -1,5 +1,6 @@
 // reaction_bar.dart — Center Admin with reaction delete permissions
 // Edit is only offered for the current user's own reactions.
+// Delete is allowed for own reactions OR any reaction on my advocate's post.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -115,11 +116,14 @@ class _ReactionBarState extends State<ReactionBar> {
   bool _canEditReaction(PostReactionResponse r) => _isMyReaction(r);
 
   /// Can the current user DELETE this reaction?
-  /// ✅ Own reaction, OR reaction on my advocate's post.
+  /// ✅ Own reaction, OR any reaction on my advocate's post.
   bool _canDeleteReaction(PostReactionResponse r) =>
       _isMyReaction(r) || widget.isMyAdvocatePost;
 
   /// Should we show the ⋮ menu for this reaction?
+  /// Note: **not** tied to `canReact` — a center-admin must be able to
+  /// moderate reactions on their advocate's post even when they are
+  /// not allowed to add a new reaction (e.g. inside AdvocateDetails).
   bool _showMenuFor(PostReactionResponse r) =>
       _canEditReaction(r) || _canDeleteReaction(r);
 
@@ -268,8 +272,11 @@ class _ReactionBarState extends State<ReactionBar> {
                         ),
                       ),
 
-                      // Menu — visible only when there's something to do
-                      if (showMenu && widget.canReact == true)
+                      // ✅ Menu — shown whenever there is something to do,
+                      //    independent of `canReact`. This lets a center-admin
+                      //    delete reactions on their advocate's post even when
+                      //    reactions are disabled in the surrounding view.
+                      if (showMenu)
                         PopupMenuButton<String>(
                           icon: Icon(
                             Icons.more_vert,
@@ -659,14 +666,17 @@ class _ReactionBarState extends State<ReactionBar> {
     setState(() => submitting = true);
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('jwt_token') ?? '';
+    final currentUserId = prefs.getString('userId') ?? myUserId ?? '';
 
     try {
-      // For a center-admin deleting someone else's reaction, we pass the
-      // reaction's own userId so the backend accepts the operation.
-      final ownerId = postReactionResponse.userId ?? myUserId!;
+      // ✅ Send the CURRENT user's id (the admin acting).
+      //    If the backend uses this to authorise the delete, passing the
+      //    reaction owner's id would block a center-admin from removing
+      //    someone else's reaction on their advocate's post.
+      final actorId = currentUserId;
 
       bool deleted = await ReactionService.deleteReaction(
-          reactionId, ownerId, token);
+          reactionId, actorId, token);
 
       if (deleted) {
         widget.onReactionChanged?.call(postReactionResponse, "remove");

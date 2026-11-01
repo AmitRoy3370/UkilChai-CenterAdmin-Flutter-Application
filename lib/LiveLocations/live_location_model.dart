@@ -6,6 +6,7 @@ class UserLiveLocationDataResponse {
   final String? advocateId;
   final String userId;
   final String userName;
+  final String? fullName;
   final String locationName;
   final double latitude;
   final double longitude;
@@ -17,6 +18,7 @@ class UserLiveLocationDataResponse {
     this.advocateId,
     required this.userId,
     required this.userName,
+    required this.fullName,
     required this.locationName,
     required this.latitude,
     required this.longitude,
@@ -30,6 +32,7 @@ class UserLiveLocationDataResponse {
       advocateId: json['advocateId'],
       userId: json['userId'] ?? '',
       userName: json['userName'] ?? 'Unknown',
+      fullName: json['fullName'],
       locationName: json['locationName'] ?? '',
       latitude: json['lattitude']?.toDouble() ?? 0.0,
       longitude: json['longitude']?.toDouble() ?? 0.0,
@@ -46,6 +49,7 @@ class UserLiveLocationDataResponse {
       'advocateId': advocateId,
       'userId': userId,
       'userName': userName,
+      'fullName': fullName,
       'locationName': locationName,
       'lattitude': latitude,
       'longitude': longitude,
@@ -126,6 +130,7 @@ class LiveLocationData {
       advocateId: advocateId,
       userId: userId,
       userName: userName,
+      fullName: null,
       locationName: locationName,
       latitude: latitude,
       longitude: longitude,
