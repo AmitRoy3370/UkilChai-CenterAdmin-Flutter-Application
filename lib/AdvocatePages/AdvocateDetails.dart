@@ -17,7 +17,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
-
+import '../PostRelatedPages/post_card_home_page.dart';
+import 'advocate_additional_info_model.dart';
+import 'advocate_working_experience_model.dart';
 import 'dart:convert';
 
 import '../CaseRelatedPages/AddCaseRequestPage.dart';
@@ -504,7 +506,7 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
     );
   }
 
-  Widget _buildWorkingExperienceInfoSection({
+  Widget _buildWorkingExperienceInfoSection1({
     required IconData icon,
     required String title,
     required AdvocateWorkingExperience advocateWorkingExperience,
@@ -610,7 +612,7 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
     );
   }
 
-  Widget _buildAdditionalInfoSection({
+  Widget _buildAdditionalInfoSection1({
     required IconData icon,
     required String title,
     required AdvocateAdditionalInfo advocateAdditionalInfo,
@@ -1480,40 +1482,50 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: [
+                  // Working Experience (plain string list)
                   _buildInfoSection(
                     icon: Icons.work_history,
                     title: "Working Experience",
-                    items: widget.advocateDetailsModel.workingExperiences ?? const <String>[],
+                    items: widget.advocateDetailsModel.workingExperiences ??
+                        const <String>[],
                     color: Colors.blue,
                   ),
                   const SizedBox(height: 16),
 
+                  // Working Experience Details (structured card)
                   if (widget.advocateDetailsModel.workingExperience != null) ...[
                     _buildWorkingExperienceInfoSection(
                       icon: Icons.work_history,
-                      title: "Working Experience",
-                      advocateWorkingExperience: widget.advocateDetailsModel.workingExperience!,
+                      title: "Working Experience Details",
+                      advocateWorkingExperience:
+                          widget.advocateDetailsModel.workingExperience!,
                       color: Colors.blue,
                     ),
                     const SizedBox(height: 16),
                   ],
 
+                  // Additional Information (structured card)
                   if (widget.advocateDetailsModel.additionalInfo != null) ...[
                     _buildAdditionalInfoSection(
                       icon: Icons.info_outline,
-                      title: "Additional information",
-                      advocateAdditionalInfo: widget.advocateDetailsModel.additionalInfo!,
+                      title: "Additional Information",
+                      advocateAdditionalInfo:
+                          widget.advocateDetailsModel.additionalInfo!,
                       color: Colors.purple,
                     ),
                     const SizedBox(height: 16),
                   ],
 
-                  if (widget.advocateDetailsModel.advocateDocuments?.attachments != null &&
-                      widget.advocateDetailsModel.advocateDocuments!.attachments!.isNotEmpty) ...[
+                  // Attachments / Uploaded Documents
+                  if (widget.advocateDetailsModel.advocateDocuments?.attachments !=
+                          null &&
+                      widget.advocateDetailsModel.advocateDocuments!
+                          .attachments!.isNotEmpty) ...[
                     _buildInfoSection(
                       icon: Icons.attach_file,
                       title: "Attachments",
-                      items: widget.advocateDetailsModel.advocateDocuments!.attachments!
+                      items: widget.advocateDetailsModel.advocateDocuments!
+                          .attachments!
                           .map((e) => e.toString())
                           .toList(),
                       color: Colors.blue,
@@ -1521,17 +1533,19 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
                     const SizedBox(height: 16),
                   ],
 
+                  // Location
                   _buildInfoSection(
                     icon: Icons.location_on,
                     title: "Location",
                     items: [
-                      widget.advocateDetailsModel.locationName ?? "Not available",
+                      widget.advocateDetailsModel.locationName ??
+                          "Not available",
                     ],
                     color: Colors.green,
                   ),
-
                   const SizedBox(height: 16),
 
+                  // District
                   _buildInfoSection(
                     icon: Icons.place,
                     title: "District",
@@ -1540,22 +1554,24 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
                     ],
                     color: Colors.purple,
                   ),
-
                   const SizedBox(height: 16),
 
+                  // Specialities
                   _buildInfoSection(
                     icon: Icons.star,
                     title: "Specialities",
-                    items: widget.advocateDetailsModel.advocateSpeciality ?? const <String>[],
+                    items: widget.advocateDetailsModel.advocateSpeciality ??
+                        const <String>[],
                     color: Colors.orange,
                   ),
-
                   const SizedBox(height: 16),
 
+                  // Degrees
                   _buildInfoSection(
                     icon: Icons.school,
                     title: "Degrees",
-                    items: widget.advocateDetailsModel.degrees ?? const <String>[],
+                    items:
+                        widget.advocateDetailsModel.degrees ?? const <String>[],
                     color: Colors.teal,
                   ),
                 ],
@@ -1648,4 +1664,217 @@ class AdvocateDetailsState extends State<AdvocateDetails> {
       }),
     );
   }
+
+  // ========== Working Experience (structured) ==========
+  Widget _buildWorkingExperienceInfoSection({
+    required IconData icon,
+    required String title,
+    required AdvocateWorkingExperience advocateWorkingExperience,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (advocateWorkingExperience == null)
+            Text(
+              "No data available",
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: Colors.grey.shade500,
+                fontStyle: FontStyle.italic,
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Bar Association :- ${advocateWorkingExperience.barAssociation ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Bar Controll enrollment :- ${advocateWorkingExperience.barControllEnrolment ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Enrollment date :- ${advocateWorkingExperience.enrollmentDate ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Practicing court :- ${advocateWorkingExperience.practicingCoat ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Primary Practice :- ${advocateWorkingExperience.primaryPractice ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Legal Practice :- ${advocateWorkingExperience.yearOfLegalPractice ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Current chember :- ${advocateWorkingExperience.currentChemberName ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Professional experience :- ${advocateWorkingExperience.professionalExperience ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ========== Additional Information (structured) ==========
+  Widget _buildAdditionalInfoSection({
+    required IconData icon,
+    required String title,
+    required AdvocateAdditionalInfo advocateAdditionalInfo,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (advocateAdditionalInfo == null)
+            Text(
+              "No data available",
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: Colors.grey.shade500,
+                fontStyle: FontStyle.italic,
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Parmanent Adress :- ${advocateAdditionalInfo.parmanentAdress ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'City :- ${advocateAdditionalInfo.cityOfUpozila ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'nid :- ${advocateAdditionalInfo.nidNumber ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'DOB :- ${advocateAdditionalInfo.dateOfBirth ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Whatsapp :- ${advocateAdditionalInfo.whatsAppNumber ?? 'N/A'}',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.grey.shade700, height: 1.4),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
 }
