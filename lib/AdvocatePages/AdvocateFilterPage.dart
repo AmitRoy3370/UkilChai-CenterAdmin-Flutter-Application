@@ -12,6 +12,9 @@ import '../AdvocatePages/AdvocateDetailsModel.dart';
 import 'AdvocateDetails.dart';
 import '../PageTransition.dart';
 import '../main.dart'; // Add this import for MyHomePage
+import '../AdvocatePages/advocate_additional_info_model.dart';
+import '../AdvocatePages/advocate_documents_model.dart';
+import '../AdvocatePages/advocate_working_experience_model.dart';
 
 class AdvocateFilterPage extends StatefulWidget {
   const AdvocateFilterPage({super.key});
@@ -219,7 +222,19 @@ class _AdvocateFilterPageState extends State<AdvocateFilterPage> {
           ..contactInfoId = advocateDecoded['contactInfoId']?.toString()
           ..locationId = advocateDecoded['locationId']?.toString()
           ..cvHexKey = advocateDecoded['cvHexKey']?.toString()
-          ..district = advocateDecoded['district'];
+          ..district = advocateDecoded['district']
+          ..workingExperience = _safeParse(
+            advocateDecoded["workingExperience"],
+            AdvocateWorkingExperience.fromJson,
+          )
+          ..advocateDocuments = _safeParse(
+            advocateDecoded["advocateDocuments"],
+            AdvocateDocuments.fromJson,
+          )
+          ..additionalInfo = _safeParse(
+            advocateDecoded["additionalInfo"],
+            AdvocateAdditionalInfo.fromJson,
+          );
 
         list.add(model);
 
@@ -235,6 +250,21 @@ class _AdvocateFilterPageState extends State<AdvocateFilterPage> {
       if (mounted) {
         setState(() => loading = false);
       }
+    }
+  }
+
+
+  static T? _safeParse<T>(
+    dynamic raw,
+    T Function(Map<String, dynamic>) fromJson,
+  ) {
+    if (raw == null) return null;
+    if (raw is! Map<String, dynamic>) return null;
+    try {
+      return fromJson(raw);
+    } catch (e) {
+      debugPrint("⚠️ Nested model parse failed: $e");
+      return null;
     }
   }
 
@@ -287,7 +317,19 @@ class _AdvocateFilterPageState extends State<AdvocateFilterPage> {
           ..contactInfoId = advocateDecoded['contactInfoId']?.toString()
           ..locationId = advocateDecoded['locationId']?.toString()
           ..cvHexKey = advocateDecoded['cvHexKey']?.toString()
-          ..district = advocateDecoded['district'];
+          ..district = advocateDecoded['district']
+          ..workingExperience = _safeParse(
+            advocateDecoded["workingExperience"],
+            AdvocateWorkingExperience.fromJson,
+          )
+          ..advocateDocuments = _safeParse(
+            advocateDecoded["advocateDocuments"],
+            AdvocateDocuments.fromJson,
+          )
+          ..additionalInfo = _safeParse(
+            advocateDecoded["additionalInfo"],
+            AdvocateAdditionalInfo.fromJson,
+          );
 
         models.add(model);
       }
@@ -359,7 +401,19 @@ class _AdvocateFilterPageState extends State<AdvocateFilterPage> {
           ..contactInfoId = advocateDecoded['contactInfoId']?.toString()
           ..locationId = advocateDecoded['locationId']?.toString()
           ..cvHexKey = advocateDecoded['cvHexKey']?.toString()
-          ..district = advocateDecoded['district'];
+          ..district = advocateDecoded['district']
+          ..workingExperience = _safeParse(
+            advocateDecoded["workingExperience"],
+            AdvocateWorkingExperience.fromJson,
+          )
+          ..advocateDocuments = _safeParse(
+            advocateDecoded["advocateDocuments"],
+            AdvocateDocuments.fromJson,
+          )
+          ..additionalInfo = _safeParse(
+            advocateDecoded["additionalInfo"],
+            AdvocateAdditionalInfo.fromJson,
+          );
 
         models.add(model);
       }
